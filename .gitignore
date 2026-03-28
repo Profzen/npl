@@ -1,77 +1,54 @@
-# =============================================================
-# Python
-# =============================================================
+# ─── Environnement Python ───────────────────────────────────────────────────
 venv_nlp/
 venv/
 .venv/
 __pycache__/
-*.pyc
+*.py[cod]
 *.pyo
 *.pyd
+.Python
 *.egg-info/
 dist/
 build/
 .eggs/
-*.log
 
-# =============================================================
-# Modeles AI / fichiers binaires lourds
-# =============================================================
-# Fichiers de modeles (peuvent atteindre plusieurs Go)
-*.gguf
-*.safetensors
-*.bin
-*.pt
-*.pth
+# ─── Variables d'environnement ──────────────────────────────────────────────
+.env
+.env.*
+!.env.example
 
-# Dossiers de modeles complets
+# ─── Node.js / Frontend ─────────────────────────────────────────────────────
+node_modules/
+frontend/dist/
+frontend/.vite/
+.npm
+
+# ─── Modèles IA (fichiers lourds > GitHub 100 MB) ───────────────────────────
+# Modèles complets
 phi3-mini-gguf/
 TinyLlama-1.1B-Chat-v1.0/
 
-# Checkpoints d'entrainement (optimizer, rng, scaler, scheduler = seulement lourd)
-tinyllama_oracle_lora/checkpoint-*/optimizer.pt
-tinyllama_oracle_lora/checkpoint-*/rng_state.pth
-tinyllama_oracle_lora/checkpoint-*/scaler.pt
-tinyllama_oracle_lora/checkpoint-*/scheduler.pt
-tinyllama_oracle_lora/checkpoint-*/*.safetensors
-tinyllama_oracle_lora/*.safetensors
+# Fichiers binaires de modèles (poids, checkpoints d'entraînement)
+*.safetensors
+*.gguf
+*.pt
+*.pth
+*.bin
 
-# =============================================================
-# Frontend Node.js
-# =============================================================
-frontend/node_modules/
-frontend/dist/
-frontend/.vite/
-node_modules/
+# Checkpoints d'entraînement TinyLlama (états optimiseur, etc.)
+tinyllama_oracle_lora/checkpoint-*/
 
-# =============================================================
-# Variables d'environnement / secrets
-# =============================================================
-.env
-.env.local
-.env.*.local
-*.env
-
-# =============================================================
-# Documents sensibles
-# =============================================================
+# ─── Fichiers PDF personnels ─────────────────────────────────────────────────
 *.pdf
 
-# =============================================================
-# IDE / OS
-# =============================================================
-.vscode/
+# ─── OS / Editeurs ──────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
 .idea/
+.vscode/settings.json
 *.swp
 *.swo
-Thumbs.db
-.DS_Store
-desktop.ini
 
-# =============================================================
-# Fichiers temporaires / cache
-# =============================================================
-*.tmp
-*.bak
-*.orig
-.cache/
+# ─── Logs ───────────────────────────────────────────────────────────────────
+*.log
+logs/
