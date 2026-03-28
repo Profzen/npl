@@ -1,0 +1,135 @@
+# Oracle NLP → SQL Assistant
+**TinyLlama-1.1B + LoRA fine-tuné · Interface Streamlit locale**
+
+---
+
+## Description
+
+Application locale qui transforme des questions en français en requêtes SQL Oracle,
+les exécute sur une table d'audit simulée, et reformule le résultat en langage naturel
+via un second appel au modèle TinyLlama.
+
+---
+
+## Structure du dossier
+
+```
+nlp/
+├── app_oracle_nlp.py              ← interface Streamlit (démo superviseur)
+├── test_tinyllama_oracle_lora_local.py  ← script de test console (5 questions aléatoires)
+├── TinyLlama-1.1B-Chat-v1.0/     ← modèle de base (dézippé automatiquement)
+├── tinyllama_oracle_lora/         ← adapter LoRA fine-tuné Oracle
+├── oracle_audit_trail.csv         ← table d'audit simulée
+└── oracle_nlp_dataset.csv         ← dataset d'entraînement FR→SQL
+```
+
+> Les dossiers modèle peuvent aussi être fournis en `.zip` — le script les dézippe automatiquement au premier lancement.
+
+---
+
+## Bugs résolus
+
+| Erreur | Cause | Solution |
+|--------|-------|----------|
+| `ImportError: loftq_utils` | Python 3.13 incompatible avec PEFT | Créer un venv Python 3.11 |
+| `unexpected keyword 'alora_invocation_tokens'` | PEFT 0.10.0 trop ancien vs config LoRA 0.18.1 | `pip install peft==0.18.1` |
+| `cannot import 'clear_device_cache'` | accelerate 0.29.0 incompatible avec PEFT 0.18.1 | `pip install accelerate --upgrade` |
+| `cannot import 'EncoderDecoderCache'` | transformers 4.40.0 trop ancien | `pip install transformers --upgrade` |
+| `KeyError: base_model.model.model.lm_head` | `device_map='auto'` offload sur disque sans GPU | Remplacer par `device_map=None, dtype=torch.float32` |
+| Page Streamlit blanche >10min | `max_length=512` + `do_sample=True` trop lent sur CPU | Réduire tokens + passer en mode greedy `do_sample=False` |
+
+---
+
+## Prérequis
+
+- **Python 3.11** (pas 3.13 — incompatible avec les libs ML)
+- **~4 Go de RAM** minimum (modèle chargé en float32 sur CPU)
+- Pas de GPU requis (CPU uniquement)
+
+---
+
+## Installation sur un nouveau PC
+
+### 1. Installer Python 3.11
+Télécharger sur [python.org](https://www.python.org/downloads/) et installer.
+
+### 2. Créer l'environnement virtuel
+```powershell
+cd D:\chemin\vers\nlp
+py -3.11 -m venv venv_nlp
+venv_nlp\Scripts\activate
+```
+
+### 3. Installer les dépendances
+```powershell
+pip install torch torchvision torchaudio
+pip install transformers peft==0.18.1 accelerate pandas
+pip install streamlit pandasql
+```
+
+---
+
+## Lancement
+
+### Interface Streamlit (démo)
+```powershell
+cd D:\chemin\vers\nlp
+venv_nlp\Scripts\activate
+streamlit run app_oracle_nlp.py
+```
+→ S'ouvre automatiquement sur `http://localhost:8501`
+
+### Script de test console
+```powershell
+python test_tinyllama_oracle_lora_local.py
+```
+→ Teste 5 questions aléatoires du dataset et affiche les SQL générés dans le terminal.
+
+---
+
+## Fonctionnement de l'interface
+
+L'application Streamlit comporte 3 onglets :
+
+**💬 Requête**
+1. Saisir une question en français (ou cliquer sur un exemple dans la sidebar)
+2. Cliquer sur **⚡ Générer SQL + Réponse**
+3. Le modèle exécute 3 étapes :
+   - ① Génération de la requête SQL Oracle
+   - ② Reformulation structurelle de ce que fait le SQL
+   - ③ Exécution sur la table d'audit + affichage du tableau brut
+   - ④ Reformulation en français naturel via TinyLlama
+
+**📋 Table d'audit** — vue complète avec recherche et filtre par colonne
+
+**🕘 Historique** — toutes les questions posées + export CSV
+
+---
+
+## Performances sur CPU
+
+| Étape | Temps estimé |
+|-------|-------------|
+| Chargement du modèle (1ère fois) | ~7 minutes |
+| Génération SQL | ~30 secondes |
+| Exécution sur la table | < 5 secondes |
+| Reformulation IA | ~30 secondes |
+| **Total par question** | **~1 à 2 minutes** |
+
+> Pour accélérer : utiliser un GPU Nvidia avec `dtype=torch.float16` dans le code.
+
+---
+
+## Dépendances complètes
+
+```
+torch
+torchvision
+torchaudio
+transformers        (dernière version)
+peft==0.18.1
+accelerate          (dernière version)
+pandas
+streamlit
+pandasql
+```

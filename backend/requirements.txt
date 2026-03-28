@@ -1,0 +1,10 @@
+fastapi==0.116.1
+uvicorn[standard]==0.31.0
+pydantic==2.9.2
+python-dotenv==1.0.1
+oracledb==2.4.1
+torch==2.10.0
+transformers==5.2.0
+peft==0.18.1
+llama_cpp_python==0.3.16
+pandas==2.3.3

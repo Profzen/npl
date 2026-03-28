@@ -1,0 +1,311 @@
+📘 CAHIER DES CHARGES
+Système NLP → SQL pour Audit Oracle
+1️⃣ Contexte du Projet
+1.1 Contexte Académique
+
+Projet de fin d’études Master visant à concevoir un système intelligent capable de transformer des questions en français en requêtes SQL exploitables sur une base Oracle d’audit.
+
+1.2 Contexte Entreprise
+
+L’entreprise souhaite :
+
+Interroger la base d’audit via langage naturel
+
+Simplifier l’accès aux données
+
+Sécuriser les requêtes
+
+Déployer le système sur serveur interne CPU
+
+2️⃣ Objectifs du Projet
+2.1 Objectif Principal
+
+Développer un système capable de :
+
+Recevoir une question en français
+
+Générer une requête SQL valide et sécurisée
+
+Exécuter la requête sur Oracle
+
+Reformuler le résultat en réponse claire en français
+
+2.2 Objectifs Secondaires
+
+Limiter les requêtes à SELECT uniquement
+
+Empêcher toute requête destructive (DELETE, DROP, UPDATE)
+
+Garantir performance acceptable sur CPU
+
+Interface web locale simple
+
+Architecture déployable en intranet
+
+3️⃣ Périmètre Fonctionnel
+3.1 Fonctionnalités Obligatoires
+F1 — Compréhension en français
+
+Le système doit comprendre :
+
+Questions directes
+
+Reformulations
+
+Variations linguistiques
+
+F2 — Génération SQL
+
+Le système doit :
+
+Générer SQL Oracle valide
+
+Respecter la structure réelle de la base
+
+Utiliser uniquement tables autorisées
+
+F3 — Validation Sécurité SQL
+
+Le système doit :
+
+Refuser toute requête non SELECT
+
+Bloquer DROP / DELETE / UPDATE / ALTER
+
+Vérifier syntaxe avant exécution
+
+F4 — Exécution Oracle
+
+Connexion via :
+
+SQLAlchemy ou cx_Oracle
+
+Connexion sécurisée
+
+F5 — Reformulation des Résultats
+
+Le système doit :
+
+Transformer le résultat SQL en phrase naturelle
+
+Résumer intelligemment si grand volume
+
+Rester clair et professionnel
+
+F6 — Interface Web Locale
+
+Doit contenir :
+
+Champ de saisie
+
+Bouton envoyer
+
+Affichage réponse
+
+Option affichage SQL généré
+
+4️⃣ Périmètre Non Fonctionnel
+4.1 Performance
+
+Temps de réponse < 5 secondes (CPU)
+
+Chargement modèle optimisé
+
+Quantization 4-bit ou 8-bit
+
+4.2 Sécurité
+
+Requêtes restreintes
+
+Pas d’accès direct base utilisateur
+
+Logs des requêtes générées
+
+4.3 Scalabilité
+
+Architecture modulaire
+
+API REST indépendante
+
+Possibilité future ajout GPU
+
+5️⃣ Architecture Technique
+5.1 Environnement d’Entraînement
+
+Plateforme :
+Google Colab GPU
+
+Langage :
+Python 3.10+
+
+Librairies :
+
+transformers
+
+peft
+
+datasets
+
+accelerate
+
+bitsandbytes
+
+sqlalchemy
+
+cx_Oracle
+
+fastapi
+
+uvicorn
+
+5.2 Modèle NLP
+
+Modèle Base :
+Llama 3 8B
+
+Méthode :
+Fine-Tuning LoRA
+
+Quantization :
+4-bit pour déploiement CPU
+
+5.3 Architecture Système
+
+Utilisateur
+↓
+Interface Web
+↓
+API FastAPI
+↓
+LLM (FR → SQL)
+↓
+Validation SQL
+↓
+Oracle DB
+↓
+LLM (SQL → FR)
+↓
+Réponse utilisateur
+
+6️⃣ Dataset
+6.1 Format
+
+Chaque entrée doit contenir :
+
+question_fr
+
+sql_query
+
+expected_answer_format
+
+6.2 Taille
+
+Minimum :
+300 exemples
+
+Cible :
+800–1000 exemples
+
+6.3 Structure
+
+Format JSONL recommandé :
+
+{
+  "instruction": "Transforme la question en requête SQL sécurisée.",
+  "input": "Qui a modifié la table CLIENT hier ?",
+  "output": "SELECT user_name, action_date FROM audit_log WHERE table_name='CLIENT' AND action='UPDATE' AND action_date = TRUNC(SYSDATE-1);"
+}
+7️⃣ Workflow de Développement
+PHASE 1 — Analyse
+
+Extraire schéma Oracle
+
+Lister tables autorisées
+
+Définir intentions métier
+
+PHASE 2 — Dataset
+
+Créer dataset initial
+
+Générer variantes linguistiques
+
+Vérifier SQL manuellement
+
+PHASE 3 — Fine-Tuning
+
+Charger Llama 3 8B
+
+Appliquer LoRA
+
+Entraîner sur Colab GPU
+
+Sauvegarder poids LoRA
+
+PHASE 4 — Évaluation
+
+Tester sur questions nouvelles
+
+Mesurer taux de SQL correct
+
+Corriger dataset si nécessaire
+
+PHASE 5 — Optimisation CPU
+
+Appliquer quantization
+
+Tester temps réponse
+
+Ajuster batch et paramètres
+
+PHASE 6 — Backend
+
+Développer API FastAPI
+
+Intégrer modèle
+
+Intégrer Oracle
+
+PHASE 7 — Interface
+
+Développer interface simple
+
+Connecter API
+
+Tester utilisateurs
+
+8️⃣ Critères de Réussite
+
+Le projet sera validé si :
+
+90%+ requêtes SQL correctes
+
+Aucun SQL destructif généré
+
+Temps réponse acceptable CPU
+
+Interface fonctionnelle
+
+Déploiement entreprise possible
+
+9️⃣ Contraintes
+
+Serveur entreprise CPU uniquement
+
+Pas d’exposition données sensibles
+
+Respect sécurité IT interne
+
+🔟 Livrables
+
+Modèle fine-tuné LoRA
+
+Script d’inférence CPU
+
+API FastAPI
+
+Interface Web
+
+Documentation technique
+
+Rapport de performance

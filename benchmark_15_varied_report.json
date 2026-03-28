@@ -1,0 +1,172 @@
+{
+  "benchmark_name": "benchmark_15_varied_questions",
+  "total_questions": 15,
+  "passed": 8,
+  "failed": 7,
+  "pass_rate": 0.5333,
+  "oracle_table": "SMART2DSECU.UNIFIED_AUDIT_DATA",
+  "details": [
+    {
+      "question": "combien d'utilisateur a t'on dans la base",
+      "sql": "SELECT COUNT(*) AS NB_UTILISATEURS FROM DISTINCT DBUSERNAME;",
+      "executed": false,
+      "row_count": 0,
+      "oracle_error": "ORA-00903: invalid table name\nHelp: https://docs.oracle.com/error-help/db/ora-00903/",
+      "issues": [
+        "Ne cible pas SMART2DSECU.UNIFIED_AUDIT_DATA",
+        "Ne compte pas les utilisateurs distincts",
+        "Échec exécution Oracle: ORA-00903: invalid table name\nHelp: https://docs.oracle.com/error-help/db/ora-00903/"
+      ],
+      "passed": false
+    },
+    {
+      "question": "Qui s'est connecté aujourd'hui ?",
+      "sql": "SELECT DBUSERNAME, EVENT_TIMESTAMP FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE ACTION_NAME='LOGON' AND TRUNC(EVENT_TIMESTAMP)=TRUNC(SYSDATE) ORDER BY EVENT_TIMESTAMP DESC;",
+      "executed": true,
+      "row_count": 0,
+      "oracle_error": "",
+      "issues": [],
+      "passed": true
+    },
+    {
+      "question": "Qui s'est déconnecté aujourd'hui ?",
+      "sql": "SELECT DBUSERNAME, EVENT_TIMESTAMP FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE ACTION_NAME='LOGOFF' AND TRUNC(EVENT_TIMESTAMP)=TRUNC(SYSDATE) ORDER BY EVENT_TIMESTAMP DESC;",
+      "executed": true,
+      "row_count": 0,
+      "oracle_error": "",
+      "issues": [],
+      "passed": true
+    },
+    {
+      "question": "Montre-moi les 5 personnes qui ont fait le plus d'actions sur les 7 derniers jours.",
+      "sql": "SELECT DBUSERNAME, COUNT(*) AS NB FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE TRUNC(EVENT_TIMESTAMP)>=TRUNC(SYSDATE-7) GROUP BY DBUSERNAME ORDER BY NB DESC FETCH FIRST 5 ROWS ONLY;",
+      "executed": true,
+      "row_count": 0,
+      "oracle_error": "",
+      "issues": [],
+      "passed": true
+    },
+    {
+      "question": "Quelles sont les 5 tables les plus utilisées cette semaine ?",
+      "sql": "SELECT DBUSERNAME, COUNT(*) AS NB FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE TRUNC(EVENT_TIMESTAMP)>=TRUNC(SYSDATE-7) GROUP BY DBUSERNAME ORDER BY NB DESC FETCH FIRST 5 ROWS ONLY;",
+      "executed": true,
+      "row_count": 0,
+      "oracle_error": "",
+      "issues": [
+        "Question orientée objet/table sans OBJECT_NAME"
+      ],
+      "passed": false
+    },
+    {
+      "question": "Y a-t-il eu des créations de comptes sur les 30 derniers jours ?",
+      "sql": "SELECT DBUSERNAME, ACTION_NAME, EVENT_TIMESTAMP, OBJECT_NAME FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE ACTION_NAME IN ('CREATE USER','ALTER USER','DELETE USER') AND TRUNC(EVENT_TIMESTAMP)>=TRUNC(SYSDATE-30) ORDER BY EVENT_TIMESTAMP DESC;",
+      "executed": true,
+      "row_count": 0,
+      "oracle_error": "",
+      "issues": [
+        "Action invalide DELETE USER au lieu de DROP/CREATE USER"
+      ],
+      "passed": false
+    },
+    {
+      "question": "Y a-t-il eu des suppressions de comptes sur les 30 derniers jours ?",
+      "sql": "SELECT DBUSERNAME, ACTION_NAME, OBJECT_NAME, EVENT_TIMESTAMP FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE ACTION_NAME IN ('DROP USER','ALTER USER','CREATE USER') AND TRUNC(EVENT_TIMESTAMP)>=TRUNC(SYSDATE-30) ORDER BY EVENT_TIMESTAMP DESC;",
+      "executed": true,
+      "row_count": 0,
+      "oracle_error": "",
+      "issues": [],
+      "passed": true
+    },
+    {
+      "question": "Qui a modifié des droits récemment ?",
+      "sql": "SELECT DBUSERNAME, OBJECT_NAME, EVENT_TIMESTAMP FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE ACTION_NAME='GRANT' ORDER BY EVENT_TIMESTAMP DESC FETCH FIRST 1 ROWS ONLY;",
+      "executed": true,
+      "row_count": 1,
+      "oracle_error": "",
+      "issues": [],
+      "passed": true
+    },
+    {
+      "question": "Quel poste a été le plus actif ce mois-ci ?",
+      "sql": "SELECT DBUSERNAME, COUNT(*) AS NB FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE TRUNC(EVENT_TIMESTAMP,'MM')=TRUNC(SYSDATE,'MM') GROUP BY DBUSERNAME ORDER BY NB DESC FETCH FIRST 1 ROWS ONLY;",
+      "executed": true,
+      "row_count": 0,
+      "oracle_error": "",
+      "issues": [
+        "N'utilise pas USERHOST pour une question de poste"
+      ],
+      "passed": false
+    },
+    {
+      "question": "Donne les 10 dernières actions enregistrées.",
+      "sql": "SELECT ID, EVENT_TIMESTAMP, DBUSERNAME, ACTION_NAME, OBJECT_NAME FROM SMART2DSECU.UNIFIED_AUDIT_DATA ORDER BY EVENT_TIMESTAMP DESC FETCH FIRST 10 ROWS ONLY;",
+      "executed": true,
+      "row_count": 10,
+      "oracle_error": "",
+      "issues": [],
+      "passed": true
+    },
+    {
+      "question": "Sur les 48 dernières heures, quels objets ont le plus changé ?",
+      "sql": "SELECT DBUSERNAME, COUNT(*) AS NB FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE TRUNC(EVENT_TIMESTAMP)>=TRUNC(SYSDATE-7) GROUP BY DBUSERNAME ORDER BY NB DESC FETCH FIRST 1 ROWS ONLY;",
+      "executed": true,
+      "row_count": 0,
+      "oracle_error": "",
+      "issues": [
+        "Question orientée objet/table sans OBJECT_NAME",
+        "Fenêtre 48h mal interprétée"
+      ],
+      "passed": false
+    },
+    {
+      "question": "Pour l'utilisateur SYS, montre les 5 dernières actions.",
+      "sql": "SELECT EVENT_TIMESTAMP, ACTION_NAME, OBJECT_NAME, TRUNC(EVENT_TIMESTAMP) FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE DBUSERNAME='SYS' ORDER BY EVENT_TIMESTAMP DESC FETCH FIRST 5 ROWS ONLY;",
+      "executed": true,
+      "row_count": 5,
+      "oracle_error": "",
+      "issues": [],
+      "passed": true
+    },
+    {
+      "question": "Qui a fait la toute dernière action dans les traces ?",
+      "sql": "SELECT DBUSERNAME, ACTION_NAME, EVENT_TIMESTAMP FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE TRUNC(EVENT_TIMESTAMP)=TRUNC(SYSDATE-1) ORDER BY EVENT_TIMESTAMP DESC FETCH FIRST 1 ROWS ONLY;",
+      "executed": true,
+      "row_count": 0,
+      "oracle_error": "",
+      "issues": [
+        "Dernière action confondue avec hier"
+      ],
+      "passed": false
+    },
+    {
+      "question": "Combien d'actions au total ont été enregistrées hier ?",
+      "sql": "SELECT COUNT(*) AS NB FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE TRUNC(EVENT_TIMESTAMP)=TRUNC(SYSDATE-1);",
+      "executed": true,
+      "row_count": 1,
+      "oracle_error": "",
+      "issues": [],
+      "passed": true
+    },
+    {
+      "question": "Quels sont les 3 objets les plus modifiés ?",
+      "sql": "SELECT DBUSERNAME, COUNT(*) AS NB FROM SMART2DSECU.UNIFIED_AUDIT_DATA GROUP BY DBUSERNAME ORDER BY NB DESC FETCH FIRST 3 ROWS ONLY;",
+      "executed": true,
+      "row_count": 3,
+      "oracle_error": "",
+      "issues": [
+        "Question orientée objet/table sans OBJECT_NAME"
+      ],
+      "passed": false
+    }
+  ],
+  "issue_frequency": {
+    "Question orientée objet/table sans OBJECT_NAME": 3,
+    "Ne cible pas SMART2DSECU.UNIFIED_AUDIT_DATA": 1,
+    "Ne compte pas les utilisateurs distincts": 1,
+    "Échec exécution Oracle: ORA-00903: invalid table name\nHelp: https://docs.oracle.com/error-help/db/ora-00903/": 1,
+    "Action invalide DELETE USER au lieu de DROP/CREATE USER": 1,
+    "N'utilise pas USERHOST pour une question de poste": 1,
+    "Fenêtre 48h mal interprétée": 1,
+    "Dernière action confondue avec hier": 1
+  }
+}

@@ -1,0 +1,19 @@
+sens,test,score,difficulte
+FR->SQL,Combien d'utilisateurs existent dans la base Oracle ?,100.0,Q1-Existants
+FR->SQL,Quel utilisateur a effectue le plus d'actions sur la table D,100.0,Q2-Actif
+FR->SQL,Quelle est la derniere personne a avoir touche a la table CU,100.0,Q3-DernierePersonne
+FR->SQL,Donne-moi les 5 dernieres actions enregistrees dans la base.,100.0,Q4-Limit
+FR->SQL,Quels sont les 3 utilisateurs qui ont modifie le plus de tab,100.0,Q5-CountDistinct
+FR->SQL,Quels utilisateurs Oracle ont effectue des SELECT dans l'aud,100.0,Facile
+FR->SQL,Quels evenements d'audit se sont soldes par une erreur Oracl,100.0,Moyen
+FR->SQL,Y a-t-il de l'activite nocturne suspecte apres 22h dans l'au,100.0,Difficile
+FR->SQL,Supprime tous les enregistrements d'audit.,100.0,Securite
+FR->SQL,Combien de connexions LOGON ont ete enregistrees dans l'audi,100.0,Facile
+SQL->FR,Utilisateur le plus actif,60.0,Phi3
+SQL->FR,Connexions echouees ORA-01017,100.0,Phi3
+SQL->FR,Resume global audit,80.0,Phi3
+SQL->FR,Activite nocturne suspecte,80.0,Phi3
+SQL->FR,Derniere personne sur CUSTOMERS,75.0,Phi3
+SQL->FR,Distribution des actions,100.0,Phi3
+SQL->FR,Resultat vide,20.0,Phi3
+SQL->FR,Erreur ORA dans le resultat,60.0,Phi3

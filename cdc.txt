@@ -1,0 +1,347 @@
+📘 CAHIER DES CHARGES COMPLET
+Système NLP → SQL pour Audit Oracle
+
+(Version Master + Déploiement Entreprise)
+
+1️⃣ CONTEXTE GÉNÉRAL
+1.1 Contexte académique
+
+Projet  visant à concevoir et implémenter un système intelligent capable de :
+
+Comprendre une question en français
+
+Générer une requête SQL Oracle sécurisée
+
+Exécuter cette requête
+
+Restituer une réponse compréhensible
+
+1.2 Contexte entreprise
+
+L’entreprise souhaite :
+
+Interroger la base d’audit Oracle via langage naturel
+
+Simplifier l’accès aux données
+
+Réduire dépendance aux experts SQL
+
+Garantir sécurité maximale
+
+Déployer en environnement interne CPU uniquement
+
+2️⃣ OBJECTIFS DU PROJET
+2.1 Objectif principal
+
+Développer un système complet comprenant :
+
+Interface web locale
+
+API sécurisée
+
+Modèle NLP fine-tuné
+
+Mécanisme de validation SQL
+
+Connexion Oracle sécurisée
+
+Reformulation intelligente des résultats
+
+3️⃣ PÉRIMÈTRE FONCTIONNEL COMPLET
+3.1 MODULE IA (NLP)
+F1 — Compréhension linguistique
+
+Le système doit comprendre :
+
+Questions simples
+
+Reformulations
+
+Synonymes
+
+Variations syntaxiques
+
+Questions avec dates relatives (hier, semaine dernière…)
+
+F2 — Génération SQL
+
+Le modèle doit :
+
+Générer uniquement du SQL Oracle valide
+
+Respecter le schéma réel
+
+Utiliser uniquement tables autorisées
+
+Gérer WHERE, GROUP BY, JOIN, ORDER BY
+
+3.2 MODULE SÉCURITÉ SQL
+F3 — Validation stricte
+
+Le système doit :
+
+Autoriser uniquement SELECT
+
+Refuser :
+
+DELETE
+
+UPDATE
+
+INSERT
+
+DROP
+
+ALTER
+
+TRUNCATE
+
+Interdire sous-requêtes dangereuses
+
+Vérifier injection SQL
+
+Parser syntaxiquement avant exécution
+
+3.3 MODULE ORACLE
+F4 — Connexion
+
+Utilisation SQLAlchemy ou cx_Oracle
+
+Compte Oracle restreint en lecture seule
+
+Timeout configuré
+
+Logs d'exécution
+
+3.4 MODULE REFORMULATION
+F5 — Réponse naturelle
+
+Le système doit :
+
+Reformuler le résultat SQL en phrase claire
+
+Résumer si grand volume
+
+Afficher tableaux si nécessaire
+
+Gérer cas :
+
+Aucun résultat
+
+Erreur SQL
+
+Question hors périmètre
+
+3.5 MODULE FRONTEND (VERSION DÉTAILLÉE)
+
+⚠️ Partie maintenant exhaustive.
+
+F6 — Interface Web Locale (Intranet)
+6.1 Architecture
+
+Frontend web accessible via navigateur interne :
+
+Options possibles :
+
+HTML + JS simple
+
+React (si besoin d’évolution)
+
+VueJS
+
+Ou interface FastAPI + Jinja2
+
+Recommandation :
+Interface légère compatible CPU entreprise.
+
+6.2 Fonctionnalités UI
+
+L’interface doit contenir :
+
+Zone principale
+
+Champ texte question
+
+Bouton "Envoyer"
+
+Indicateur de chargement
+
+Zone réponse formatée
+
+Zone avancée (admin)
+
+Affichage SQL généré
+
+Affichage temps d’exécution
+
+Affichage nombre lignes retournées
+
+Bouton "Voir détails"
+
+Gestion erreurs
+
+Le frontend doit afficher :
+
+Message erreur clair
+
+SQL refusé pour raison sécurité
+
+Timeout Oracle
+
+Question hors périmètre
+
+UX Requirements
+
+Interface claire
+
+Design sobre entreprise
+
+Non surchargée
+
+Responsive
+
+Compatible Chrome / Edge
+
+Sécurité Frontend
+
+Pas d’accès direct base Oracle
+
+Appel API uniquement
+
+Authentification possible (optionnel)
+
+4️⃣ PÉRIMÈTRE NON FONCTIONNEL
+4.1 Performance
+
+Temps réponse < 5 sec CPU
+
+Chargement modèle optimisé
+
+Quantization 4-bit
+
+Cache possible des requêtes fréquentes
+
+4.2 Sécurité
+
+Journalisation requêtes
+
+Log des erreurs
+
+Isolation serveur IA
+
+Contrôle accès intranet
+
+4.3 Scalabilité
+
+Architecture modulaire :
+
+Frontend
+
+API
+
+LLM
+
+Oracle
+
+Permet évolution vers GPU plus tard.
+
+5️⃣ ARCHITECTURE TECHNIQUE GLOBALE
+
+Utilisateur
+↓
+Frontend Web
+↓
+API FastAPI
+↓
+LLM FR → SQL
+↓
+Validation SQL
+↓
+Oracle DB
+↓
+LLM SQL → FR
+↓
+Réponse Web
+
+6️⃣ ENVIRONNEMENT D’ENTRAÎNEMENT
+
+Google Colab GPU
+
+Python 3.10
+
+transformers
+
+peft
+
+accelerate
+
+bitsandbytes
+
+datasets
+
+Méthode : Fine-Tuning LoRA
+
+7️⃣ ENVIRONNEMENT DE DÉPLOIEMENT ENTREPRISE
+
+Serveur CPU
+
+Linux recommandé
+
+Docker recommandé
+
+Quantization 4-bit
+
+Llama 3 8B + LoRA
+
+8️⃣ DATASET
+
+Minimum : 300 exemples
+Recommandé : 800–1000
+
+Format JSONL :
+
+instruction
+
+input
+
+output
+
+9️⃣ WORKFLOW PROJET
+
+Phase 1 — Analyse schéma Oracle
+Phase 2 — Création dataset
+Phase 3 — Fine-tuning LoRA
+Phase 4 — Évaluation
+Phase 5 — Quantization CPU
+Phase 6 — API
+Phase 7 — Frontend
+Phase 8 — Tests entreprise
+Phase 9 — Documentation
+
+🔟 CRITÈRES DE VALIDATION
+
+90% SQL correct
+
+0 requête destructive
+
+<5 sec CPU
+
+Interface fonctionnelle
+
+Déploiement validé IT
+
+1️⃣1️⃣ LIVRABLES
+
+Modèle LoRA fine-tuné
+
+Script inférence CPU
+
+API FastAPI
+
+Interface Web
+
+Documentation technique
+
+Rapport performance
+
+Guide déploiement entreprise

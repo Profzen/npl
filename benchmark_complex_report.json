@@ -1,0 +1,260 @@
+{
+  "total": 50,
+  "passed": 25,
+  "precision": 0.5,
+  "threshold_low": 0.85,
+  "threshold_high": 0.9,
+  "recommendation": "Reentrainement recommande",
+  "details": [
+    {
+      "question": "Sur les 7 derniers jours, quelles sont les 5 ressources les plus touchees ?",
+      "sql": "SELECT OBJECT_NAME, COUNT(*) AS NB FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE TRUNC(EVENT_TIMESTAMP)>=TRUNC(SYSDATE-7) GROUP BY OBJECT_NAME ORDER BY NB DESC FETCH FIRST 5 ROWS ONLY;",
+      "pass": true
+    },
+    {
+      "question": "Sur les 30 derniers jours, combien de personnes differentes ont ete actives ?",
+      "sql": "SELECT COUNT(DISTINCT DBUSERNAME) AS NB FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE TRUNC(EVENT_TIMESTAMP)>=TRUNC(SYSDATE-30);",
+      "pass": true
+    },
+    {
+      "question": "Sur EMPLOYEES, qui a fait la derniere operation observee ?",
+      "sql": "SELECT DBUSERNAME, ACTION_NAME, EVENT_TIMESTAMP FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE OBJECT_NAME='EMPLOYEES' ORDER BY EVENT_TIMESTAMP DESC FETCH FIRST 1 ROWS ONLY;",
+      "pass": true
+    },
+    {
+      "question": "Hier, qui a modifie des comptes utilisateurs ?",
+      "sql": "SELECT DBUSERNAME, OBJECT_NAME, EVENT_TIMESTAMP FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE ACTION_NAME='ALTER USER' AND TRUNC(EVENT_TIMESTAMP)=TRUNC(SYSDATE-1) ORDER BY EVENT_TIMESTAMP DESC;",
+      "pass": true
+    },
+    {
+      "question": "Montre les 10 dernieres operations de SYS sur DEVICE_ADDRESS.",
+      "sql": "SELECT EVENT_TIMESTAMP, ACTION_NAME, DBUSERNAME FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE OBJECT_NAME='DEVICE_ADDRESS' ORDER BY EVENT_TIMESTAMP DESC FETCH FIRST 10 ROWS ONLY;",
+      "pass": false
+    },
+    {
+      "question": "Ce mois-ci, quels sont les 5 postes les plus actifs ?",
+      "sql": "SELECT DBUSERNAME, COUNT(*) AS NB FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE TRUNC(EVENT_TIMESTAMP,'MM')=TRUNC(SYSDATE,'MM') GROUP BY DBUSERNAME ORDER BY NB DESC FETCH FIRST 5 ROWS ONLY;",
+      "pass": false
+    },
+    {
+      "question": "Sur les 14 derniers jours, combien de changements de droits ont ete faits ?",
+      "sql": "SELECT COUNT(*) AS NB FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE ACTION_NAME='GRANT' AND TRUNC(EVENT_TIMESTAMP)>=TRUNC(SYSDATE-14);",
+      "pass": false
+    },
+    {
+      "question": "Pendant les 2 dernieres semaines, quelles ressources ont ete creees ou supprimees ?",
+      "sql": "SELECT DBUSERNAME, OBJECT_NAME, EVENT_TIMESTAMP FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE ACTION_NAME IN ('DROP TABLE','DROP USER','ALTER TABLE','ALTER USER','CREATE USER','GRANT','REVOKE') AND TRUNC(EVENT_TIMESTAMP)>=TRUNC(SYSDATE-7) ORDER BY EVENT_TIMESTAMP DESC;",
+      "pass": false
+    },
+    {
+      "question": "Sur les 7 derniers jours, quelles sont les 5 personnes qui se sont le plus connectees ?",
+      "sql": "SELECT DBUSERNAME, COUNT(*) AS NB FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE ACTION_NAME='LOGON' AND TRUNC(EVENT_TIMESTAMP)>=TRUNC(SYSDATE-7) GROUP BY DBUSERNAME ORDER BY NB DESC FETCH FIRST 5 ROWS ONLY;",
+      "pass": true
+    },
+    {
+      "question": "Sur les 48 dernieres heures, quelles ressources ont eu le plus de changements ?",
+      "sql": "SELECT DBUSERNAME, COUNT(*) AS NB FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE TRUNC(EVENT_TIMESTAMP)>=TRUNC(SYSDATE-6) GROUP BY DBUSERNAME ORDER BY NB DESC FETCH FIRST 48 ROWS ONLY;",
+      "pass": false
+    },
+    {
+      "question": "Sur les 7 derniers jours, quelles sont les 5 ressources les plus touchees ?",
+      "sql": "SELECT OBJECT_NAME, COUNT(*) AS NB FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE TRUNC(EVENT_TIMESTAMP)>=TRUNC(SYSDATE-7) GROUP BY OBJECT_NAME ORDER BY NB DESC FETCH FIRST 5 ROWS ONLY;",
+      "pass": true
+    },
+    {
+      "question": "Sur les 30 derniers jours, combien de personnes differentes ont ete actives ?",
+      "sql": "SELECT COUNT(DISTINCT DBUSERNAME) AS NB FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE TRUNC(EVENT_TIMESTAMP)>=TRUNC(SYSDATE-30);",
+      "pass": true
+    },
+    {
+      "question": "Sur EMPLOYEES, qui a fait la derniere operation observee ?",
+      "sql": "SELECT DBUSERNAME, ACTION_NAME, EVENT_TIMESTAMP FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE OBJECT_NAME='EMPLOYEES' ORDER BY EVENT_TIMESTAMP DESC FETCH FIRST 1 ROWS ONLY;",
+      "pass": true
+    },
+    {
+      "question": "Hier, qui a modifie des comptes utilisateurs ?",
+      "sql": "SELECT DBUSERNAME, OBJECT_NAME, EVENT_TIMESTAMP FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE ACTION_NAME='ALTER USER' AND TRUNC(EVENT_TIMESTAMP)=TRUNC(SYSDATE-1) ORDER BY EVENT_TIMESTAMP DESC;",
+      "pass": true
+    },
+    {
+      "question": "Montre les 10 dernieres operations de SYS sur DEVICE_ADDRESS.",
+      "sql": "SELECT EVENT_TIMESTAMP, ACTION_NAME, DBUSERNAME FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE OBJECT_NAME='DEVICE_ADDRESS' ORDER BY EVENT_TIMESTAMP DESC FETCH FIRST 10 ROWS ONLY;",
+      "pass": false
+    },
+    {
+      "question": "Ce mois-ci, quels sont les 5 postes les plus actifs ?",
+      "sql": "SELECT DBUSERNAME, COUNT(*) AS NB FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE TRUNC(EVENT_TIMESTAMP,'MM')=TRUNC(SYSDATE,'MM') GROUP BY DBUSERNAME ORDER BY NB DESC FETCH FIRST 5 ROWS ONLY;",
+      "pass": false
+    },
+    {
+      "question": "Sur les 14 derniers jours, combien de changements de droits ont ete faits ?",
+      "sql": "SELECT COUNT(*) AS NB FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE ACTION_NAME='GRANT' AND TRUNC(EVENT_TIMESTAMP)>=TRUNC(SYSDATE-14);",
+      "pass": false
+    },
+    {
+      "question": "Pendant les 2 dernieres semaines, quelles ressources ont ete creees ou supprimees ?",
+      "sql": "SELECT DBUSERNAME, OBJECT_NAME, EVENT_TIMESTAMP FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE ACTION_NAME IN ('DROP TABLE','DROP USER','ALTER TABLE','ALTER USER','CREATE USER','GRANT','REVOKE') AND TRUNC(EVENT_TIMESTAMP)>=TRUNC(SYSDATE-7) ORDER BY EVENT_TIMESTAMP DESC;",
+      "pass": false
+    },
+    {
+      "question": "Sur les 7 derniers jours, quelles sont les 5 personnes qui se sont le plus connectees ?",
+      "sql": "SELECT DBUSERNAME, COUNT(*) AS NB FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE ACTION_NAME='LOGON' AND TRUNC(EVENT_TIMESTAMP)>=TRUNC(SYSDATE-7) GROUP BY DBUSERNAME ORDER BY NB DESC FETCH FIRST 5 ROWS ONLY;",
+      "pass": true
+    },
+    {
+      "question": "Sur les 48 dernieres heures, quelles ressources ont eu le plus de changements ?",
+      "sql": "SELECT DBUSERNAME, COUNT(*) AS NB FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE TRUNC(EVENT_TIMESTAMP)>=TRUNC(SYSDATE-6) GROUP BY DBUSERNAME ORDER BY NB DESC FETCH FIRST 48 ROWS ONLY;",
+      "pass": false
+    },
+    {
+      "question": "Sur les 7 derniers jours, quelles sont les 5 ressources les plus touchees ?",
+      "sql": "SELECT OBJECT_NAME, COUNT(*) AS NB FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE TRUNC(EVENT_TIMESTAMP)>=TRUNC(SYSDATE-7) GROUP BY OBJECT_NAME ORDER BY NB DESC FETCH FIRST 5 ROWS ONLY;",
+      "pass": true
+    },
+    {
+      "question": "Sur les 30 derniers jours, combien de personnes differentes ont ete actives ?",
+      "sql": "SELECT COUNT(DISTINCT DBUSERNAME) AS NB FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE TRUNC(EVENT_TIMESTAMP)>=TRUNC(SYSDATE-30);",
+      "pass": true
+    },
+    {
+      "question": "Sur EMPLOYEES, qui a fait la derniere operation observee ?",
+      "sql": "SELECT DBUSERNAME, ACTION_NAME, EVENT_TIMESTAMP FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE OBJECT_NAME='EMPLOYEES' ORDER BY EVENT_TIMESTAMP DESC FETCH FIRST 1 ROWS ONLY;",
+      "pass": true
+    },
+    {
+      "question": "Hier, qui a modifie des comptes utilisateurs ?",
+      "sql": "SELECT DBUSERNAME, OBJECT_NAME, EVENT_TIMESTAMP FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE ACTION_NAME='ALTER USER' AND TRUNC(EVENT_TIMESTAMP)=TRUNC(SYSDATE-1) ORDER BY EVENT_TIMESTAMP DESC;",
+      "pass": true
+    },
+    {
+      "question": "Montre les 10 dernieres operations de SYS sur DEVICE_ADDRESS.",
+      "sql": "SELECT EVENT_TIMESTAMP, ACTION_NAME, DBUSERNAME FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE OBJECT_NAME='DEVICE_ADDRESS' ORDER BY EVENT_TIMESTAMP DESC FETCH FIRST 10 ROWS ONLY;",
+      "pass": false
+    },
+    {
+      "question": "Ce mois-ci, quels sont les 5 postes les plus actifs ?",
+      "sql": "SELECT DBUSERNAME, COUNT(*) AS NB FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE TRUNC(EVENT_TIMESTAMP,'MM')=TRUNC(SYSDATE,'MM') GROUP BY DBUSERNAME ORDER BY NB DESC FETCH FIRST 5 ROWS ONLY;",
+      "pass": false
+    },
+    {
+      "question": "Sur les 14 derniers jours, combien de changements de droits ont ete faits ?",
+      "sql": "SELECT COUNT(*) AS NB FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE ACTION_NAME='GRANT' AND TRUNC(EVENT_TIMESTAMP)>=TRUNC(SYSDATE-14);",
+      "pass": false
+    },
+    {
+      "question": "Pendant les 2 dernieres semaines, quelles ressources ont ete creees ou supprimees ?",
+      "sql": "SELECT DBUSERNAME, OBJECT_NAME, EVENT_TIMESTAMP FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE ACTION_NAME IN ('DROP TABLE','DROP USER','ALTER TABLE','ALTER USER','CREATE USER','GRANT','REVOKE') AND TRUNC(EVENT_TIMESTAMP)>=TRUNC(SYSDATE-7) ORDER BY EVENT_TIMESTAMP DESC;",
+      "pass": false
+    },
+    {
+      "question": "Sur les 7 derniers jours, quelles sont les 5 personnes qui se sont le plus connectees ?",
+      "sql": "SELECT DBUSERNAME, COUNT(*) AS NB FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE ACTION_NAME='LOGON' AND TRUNC(EVENT_TIMESTAMP)>=TRUNC(SYSDATE-7) GROUP BY DBUSERNAME ORDER BY NB DESC FETCH FIRST 5 ROWS ONLY;",
+      "pass": true
+    },
+    {
+      "question": "Sur les 48 dernieres heures, quelles ressources ont eu le plus de changements ?",
+      "sql": "SELECT DBUSERNAME, COUNT(*) AS NB FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE TRUNC(EVENT_TIMESTAMP)>=TRUNC(SYSDATE-6) GROUP BY DBUSERNAME ORDER BY NB DESC FETCH FIRST 48 ROWS ONLY;",
+      "pass": false
+    },
+    {
+      "question": "Sur les 7 derniers jours, quelles sont les 5 ressources les plus touchees ?",
+      "sql": "SELECT OBJECT_NAME, COUNT(*) AS NB FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE TRUNC(EVENT_TIMESTAMP)>=TRUNC(SYSDATE-7) GROUP BY OBJECT_NAME ORDER BY NB DESC FETCH FIRST 5 ROWS ONLY;",
+      "pass": true
+    },
+    {
+      "question": "Sur les 30 derniers jours, combien de personnes differentes ont ete actives ?",
+      "sql": "SELECT COUNT(DISTINCT DBUSERNAME) AS NB FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE TRUNC(EVENT_TIMESTAMP)>=TRUNC(SYSDATE-30);",
+      "pass": true
+    },
+    {
+      "question": "Sur EMPLOYEES, qui a fait la derniere operation observee ?",
+      "sql": "SELECT DBUSERNAME, ACTION_NAME, EVENT_TIMESTAMP FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE OBJECT_NAME='EMPLOYEES' ORDER BY EVENT_TIMESTAMP DESC FETCH FIRST 1 ROWS ONLY;",
+      "pass": true
+    },
+    {
+      "question": "Hier, qui a modifie des comptes utilisateurs ?",
+      "sql": "SELECT DBUSERNAME, OBJECT_NAME, EVENT_TIMESTAMP FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE ACTION_NAME='ALTER USER' AND TRUNC(EVENT_TIMESTAMP)=TRUNC(SYSDATE-1) ORDER BY EVENT_TIMESTAMP DESC;",
+      "pass": true
+    },
+    {
+      "question": "Montre les 10 dernieres operations de SYS sur DEVICE_ADDRESS.",
+      "sql": "SELECT EVENT_TIMESTAMP, ACTION_NAME, DBUSERNAME FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE OBJECT_NAME='DEVICE_ADDRESS' ORDER BY EVENT_TIMESTAMP DESC FETCH FIRST 10 ROWS ONLY;",
+      "pass": false
+    },
+    {
+      "question": "Ce mois-ci, quels sont les 5 postes les plus actifs ?",
+      "sql": "SELECT DBUSERNAME, COUNT(*) AS NB FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE TRUNC(EVENT_TIMESTAMP,'MM')=TRUNC(SYSDATE,'MM') GROUP BY DBUSERNAME ORDER BY NB DESC FETCH FIRST 5 ROWS ONLY;",
+      "pass": false
+    },
+    {
+      "question": "Sur les 14 derniers jours, combien de changements de droits ont ete faits ?",
+      "sql": "SELECT COUNT(*) AS NB FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE ACTION_NAME='GRANT' AND TRUNC(EVENT_TIMESTAMP)>=TRUNC(SYSDATE-14);",
+      "pass": false
+    },
+    {
+      "question": "Pendant les 2 dernieres semaines, quelles ressources ont ete creees ou supprimees ?",
+      "sql": "SELECT DBUSERNAME, OBJECT_NAME, EVENT_TIMESTAMP FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE ACTION_NAME IN ('DROP TABLE','DROP USER','ALTER TABLE','ALTER USER','CREATE USER','GRANT','REVOKE') AND TRUNC(EVENT_TIMESTAMP)>=TRUNC(SYSDATE-7) ORDER BY EVENT_TIMESTAMP DESC;",
+      "pass": false
+    },
+    {
+      "question": "Sur les 7 derniers jours, quelles sont les 5 personnes qui se sont le plus connectees ?",
+      "sql": "SELECT DBUSERNAME, COUNT(*) AS NB FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE ACTION_NAME='LOGON' AND TRUNC(EVENT_TIMESTAMP)>=TRUNC(SYSDATE-7) GROUP BY DBUSERNAME ORDER BY NB DESC FETCH FIRST 5 ROWS ONLY;",
+      "pass": true
+    },
+    {
+      "question": "Sur les 48 dernieres heures, quelles ressources ont eu le plus de changements ?",
+      "sql": "SELECT DBUSERNAME, COUNT(*) AS NB FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE TRUNC(EVENT_TIMESTAMP)>=TRUNC(SYSDATE-6) GROUP BY DBUSERNAME ORDER BY NB DESC FETCH FIRST 48 ROWS ONLY;",
+      "pass": false
+    },
+    {
+      "question": "Sur les 7 derniers jours, quelles sont les 5 ressources les plus touchees ?",
+      "sql": "SELECT OBJECT_NAME, COUNT(*) AS NB FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE TRUNC(EVENT_TIMESTAMP)>=TRUNC(SYSDATE-7) GROUP BY OBJECT_NAME ORDER BY NB DESC FETCH FIRST 5 ROWS ONLY;",
+      "pass": true
+    },
+    {
+      "question": "Sur les 30 derniers jours, combien de personnes differentes ont ete actives ?",
+      "sql": "SELECT COUNT(DISTINCT DBUSERNAME) AS NB FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE TRUNC(EVENT_TIMESTAMP)>=TRUNC(SYSDATE-30);",
+      "pass": true
+    },
+    {
+      "question": "Sur EMPLOYEES, qui a fait la derniere operation observee ?",
+      "sql": "SELECT DBUSERNAME, ACTION_NAME, EVENT_TIMESTAMP FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE OBJECT_NAME='EMPLOYEES' ORDER BY EVENT_TIMESTAMP DESC FETCH FIRST 1 ROWS ONLY;",
+      "pass": true
+    },
+    {
+      "question": "Hier, qui a modifie des comptes utilisateurs ?",
+      "sql": "SELECT DBUSERNAME, OBJECT_NAME, EVENT_TIMESTAMP FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE ACTION_NAME='ALTER USER' AND TRUNC(EVENT_TIMESTAMP)=TRUNC(SYSDATE-1) ORDER BY EVENT_TIMESTAMP DESC;",
+      "pass": true
+    },
+    {
+      "question": "Montre les 10 dernieres operations de SYS sur DEVICE_ADDRESS.",
+      "sql": "SELECT EVENT_TIMESTAMP, ACTION_NAME, DBUSERNAME FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE OBJECT_NAME='DEVICE_ADDRESS' ORDER BY EVENT_TIMESTAMP DESC FETCH FIRST 10 ROWS ONLY;",
+      "pass": false
+    },
+    {
+      "question": "Ce mois-ci, quels sont les 5 postes les plus actifs ?",
+      "sql": "SELECT DBUSERNAME, COUNT(*) AS NB FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE TRUNC(EVENT_TIMESTAMP,'MM')=TRUNC(SYSDATE,'MM') GROUP BY DBUSERNAME ORDER BY NB DESC FETCH FIRST 5 ROWS ONLY;",
+      "pass": false
+    },
+    {
+      "question": "Sur les 14 derniers jours, combien de changements de droits ont ete faits ?",
+      "sql": "SELECT COUNT(*) AS NB FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE ACTION_NAME='GRANT' AND TRUNC(EVENT_TIMESTAMP)>=TRUNC(SYSDATE-14);",
+      "pass": false
+    },
+    {
+      "question": "Pendant les 2 dernieres semaines, quelles ressources ont ete creees ou supprimees ?",
+      "sql": "SELECT DBUSERNAME, OBJECT_NAME, EVENT_TIMESTAMP FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE ACTION_NAME IN ('DROP TABLE','DROP USER','ALTER TABLE','ALTER USER','CREATE USER','GRANT','REVOKE') AND TRUNC(EVENT_TIMESTAMP)>=TRUNC(SYSDATE-7) ORDER BY EVENT_TIMESTAMP DESC;",
+      "pass": false
+    },
+    {
+      "question": "Sur les 7 derniers jours, quelles sont les 5 personnes qui se sont le plus connectees ?",
+      "sql": "SELECT DBUSERNAME, COUNT(*) AS NB FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE ACTION_NAME='LOGON' AND TRUNC(EVENT_TIMESTAMP)>=TRUNC(SYSDATE-7) GROUP BY DBUSERNAME ORDER BY NB DESC FETCH FIRST 5 ROWS ONLY;",
+      "pass": true
+    },
+    {
+      "question": "Sur les 48 dernieres heures, quelles ressources ont eu le plus de changements ?",
+      "sql": "SELECT DBUSERNAME, COUNT(*) AS NB FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE TRUNC(EVENT_TIMESTAMP)>=TRUNC(SYSDATE-6) GROUP BY DBUSERNAME ORDER BY NB DESC FETCH FIRST 48 ROWS ONLY;",
+      "pass": false
+    }
+  ]
+}

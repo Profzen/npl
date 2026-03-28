@@ -1,0 +1,51 @@
+import os
+from dataclasses import dataclass, field
+
+
+WORKSPACE_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+
+
+def _resolve_workspace_path(path_value: str) -> str:
+    if os.path.isabs(path_value):
+        return path_value
+    return os.path.abspath(os.path.join(WORKSPACE_ROOT, path_value))
+
+
+@dataclass
+class Settings:
+    oracle_user: str = os.getenv("ORACLE_USER", "aziz")
+    oracle_password: str = os.getenv("ORACLE_PASSWORD", "aziz")
+    oracle_host: str = os.getenv("ORACLE_HOST", "192.168.132.177")
+    oracle_port: int = int(os.getenv("ORACLE_PORT", "1791"))
+    oracle_service: str = os.getenv("ORACLE_SERVICE", "OSCARDB1")
+    oracle_table: str = os.getenv("ORACLE_TABLE", "SMART2DSECU.UNIFIED_AUDIT_DATA")
+    cors_origins: list[str] = field(
+        default_factory=lambda: os.getenv(
+            "BACKEND_CORS_ORIGINS", "http://localhost:5173"
+        ).split(",")
+    )
+    model_dir: str = field(
+        default_factory=lambda: _resolve_workspace_path(
+            os.getenv("MODEL_DIR", "TinyLlama-1.1B-Chat-v1.0")
+        )
+    )
+    lora_dir: str = field(
+        default_factory=lambda: _resolve_workspace_path(
+            os.getenv("LORA_DIR", "tinyllama_oracle_lora")
+        )
+    )
+    phi3_path: str = field(
+        default_factory=lambda: _resolve_workspace_path(
+            os.getenv("PHI3_PATH", "phi3-mini-gguf/Phi-3-mini-4k-instruct-q4.gguf")
+        )
+    )
+    max_sql_tokens: int = int(os.getenv("MAX_SQL_TOKENS", "160"))
+    default_fetch_limit: int = int(os.getenv("DEFAULT_FETCH_LIMIT", "200"))
+    dashboard_row_cap: int = int(os.getenv("DASHBOARD_ROW_CAP", "5000"))
+
+    @property
+    def oracle_dsn(self) -> str:
+        return f"{self.oracle_host}:{self.oracle_port}/{self.oracle_service}"
+
+
+settings = Settings()
