@@ -35,10 +35,10 @@ def phi3_status() -> tuple[str, str | None]:
     if _PHI3_MODEL is not None:
         return "loaded", None
     if _PHI3_ERROR:
-        return "fallback", _PHI3_ERROR
+        return "error", _PHI3_ERROR
     if not _PHI3_STACK_AVAILABLE:
         _PHI3_ERROR = "llama_cpp indisponible"
-        return "fallback", _PHI3_ERROR
+        return "error", _PHI3_ERROR
 
     try:
         _PHI3_MODEL = Llama(model_path=settings.phi3_path, n_ctx=2048, n_gpu_layers=0, verbose=False)
@@ -46,7 +46,7 @@ def phi3_status() -> tuple[str, str | None]:
     except Exception as exc:
         _PHI3_ERROR = str(exc)
         _PHI3_MODEL = None
-        return "fallback", _PHI3_ERROR
+        return "error", _PHI3_ERROR
 
 
 def _rows_to_nlp_text(rows: list[dict], max_rows: int = 25, max_chars: int = 2600) -> str:
@@ -204,17 +204,9 @@ def build_synthesis(question: str, rows: list[dict], error: str | None) -> str:
     if not rows:
         return "Aucune activite detectee pour cette demande."
 
-    n = len(rows)
-    rule = _rule_synthesis(rows)
-
-    # For multiple rows, the rule-based synthesis is always complete and correct.
-    # LLM models consistently truncate enumerations, so we only use LLM for n==1.
-    if n > 1:
-        return rule
-
-    status, _ = phi3_status()
+    status, err = phi3_status()
     if status != "loaded":
-        return rule
+        return f"Synthese indisponible: Phi3 non charge ({err})."
 
     # LLM only for single-row explanations where it excels
     resultat_brut = _rows_to_nlp_text(rows)
@@ -237,7 +229,7 @@ def build_synthesis(question: str, rows: list[dict], error: str | None) -> str:
         cleaned = _cleanup_phi3_text(text)
         if cleaned:
             return cleaned
-    except Exception:
-        pass
+    except Exception as exc:
+        return f"Synthese indisponible: erreur Phi3 ({exc})."
 
-    return rule
+    return "Synthese indisponible: reponse vide du modele Phi3."

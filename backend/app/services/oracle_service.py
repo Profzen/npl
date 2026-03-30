@@ -6,17 +6,57 @@ except Exception:
     oracledb = None
     _ORACLE_DRIVER_OK = False
 
+from threading import Lock
+
 from app.config import settings
+
+from app.services.settings_service import get_oracle_connection_config, get_oracle_table
+
+
+_POOL = None
+_POOL_CFG: tuple[str, str, str, int, str] | None = None
+_POOL_LOCK = Lock()
+
+
+def _build_connection_config() -> tuple[str, str, str, int, str]:
+    user, password, host, port, service = get_oracle_connection_config()
+    return user, password, host, int(port), service
+
+
+def _create_pool(cfg: tuple[str, str, str, int, str]):
+    user, password, host, port, service = cfg
+    dsn = f"{host}:{port}/{service}"
+    return oracledb.create_pool(
+        user=user,
+        password=password,
+        dsn=dsn,
+        min=max(1, settings.oracle_pool_min),
+        max=max(2, settings.oracle_pool_max),
+        increment=max(1, settings.oracle_pool_increment),
+    )
+
+
+def _get_pool():
+    global _POOL, _POOL_CFG
+    cfg = _build_connection_config()
+
+    with _POOL_LOCK:
+        if _POOL is None or _POOL_CFG != cfg:
+            if _POOL is not None:
+                try:
+                    _POOL.close(force=True)
+                except Exception:
+                    pass
+            _POOL = _create_pool(cfg)
+            _POOL_CFG = cfg
+        return _POOL
 
 
 def get_connection():
     if not _ORACLE_DRIVER_OK:
         raise RuntimeError("oracledb package is not installed")
-    return oracledb.connect(
-        user=settings.oracle_user,
-        password=settings.oracle_password,
-        dsn=settings.oracle_dsn,
-    )
+    pool = _get_pool()
+    return pool.acquire()
 
 
 def execute_sql(sql: str) -> tuple[list[dict], str | None]:
@@ -63,9 +103,10 @@ def fetch_metadata() -> tuple[list[dict], list[dict], str]:
     try:
         conn = get_connection()
         cur = conn.cursor()
+        oracle_table = get_oracle_table()
 
         user_sql = (
-            f"SELECT DBUSERNAME, COUNT(*) AS ACTIONS FROM {settings.oracle_table} "
+            f"SELECT DBUSERNAME, COUNT(*) AS ACTIONS FROM {oracle_table} "
             "WHERE DBUSERNAME IS NOT NULL "
             "GROUP BY DBUSERNAME ORDER BY ACTIONS DESC FETCH FIRST 100 ROWS ONLY"
         )
@@ -73,7 +114,7 @@ def fetch_metadata() -> tuple[list[dict], list[dict], str]:
         users = [{"name": str(r[0]), "actions": int(r[1])} for r in cur.fetchall()]
 
         obj_sql = (
-            f"SELECT OBJECT_NAME, COUNT(*) AS ACTIONS FROM {settings.oracle_table} "
+            f"SELECT OBJECT_NAME, COUNT(*) AS ACTIONS FROM {oracle_table} "
             "WHERE OBJECT_NAME IS NOT NULL "
             "GROUP BY OBJECT_NAME ORDER BY ACTIONS DESC FETCH FIRST 100 ROWS ONLY"
         )

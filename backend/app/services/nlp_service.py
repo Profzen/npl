@@ -2,6 +2,7 @@ import re
 from typing import Any
 
 from app.config import settings
+from app.services.settings_service import get_fetch_limit, get_oracle_table
 
 try:
     import torch
@@ -16,23 +17,24 @@ except Exception:
     AutoTokenizer = None
     _MODEL_STACK_AVAILABLE = False
 
-SYSTEM_PROMPT = (
-    "Tu es un expert Oracle Database specialise en audit SQL.\\n"
-    f"Table principale : {settings.oracle_table}\\n"
-    "Colonnes reelles : ID, AUDIT_TYPE, SESSIONID, OS_USERNAME, USERHOST, TERMINAL, "
-    "AUTHENTICATION_TYPE, DBUSERNAME, CLIENT_PROGRAM_NAME, OBJECT_SCHEMA, OBJECT_NAME, "
-    "SQL_TEXT, SQL_BINDS, EVENT_TIMESTAMP, ACTION_NAME, INSTANCE\\n"
-    "Regles importantes :\\n"
-    f"- Tu ne dois interroger QU'UNE SEULE table : {settings.oracle_table}\\n"
-    "- N'utilise jamais DBA_USERS, ALL_USERS, USER_USERS ni aucune autre table/vue\\n"
-    "- Pour compter des utilisateurs, utiliser COUNT(DISTINCT DBUSERNAME) et ignorer NULL\\n"
-    "- Colonne utilisateur = DBUSERNAME\\n"
-    "- Colonne timestamp = EVENT_TIMESTAMP\\n"
-    "- Colonne objet = OBJECT_NAME\\n"
-    "- Colonne hote = USERHOST\\n"
-    "- connexion = LOGON, deconnexion = LOGOFF, lecture = SELECT\\n"
-    "- Reponds uniquement en SQL Oracle valide."
-)
+def _system_prompt(table_name: str) -> str:
+    return (
+        "Tu es un expert Oracle Database specialise en audit SQL.\\n"
+        f"Table principale : {table_name}\\n"
+        "Colonnes reelles : ID, AUDIT_TYPE, SESSIONID, OS_USERNAME, USERHOST, TERMINAL, "
+        "AUTHENTICATION_TYPE, DBUSERNAME, CLIENT_PROGRAM_NAME, OBJECT_SCHEMA, OBJECT_NAME, "
+        "SQL_TEXT, SQL_BINDS, EVENT_TIMESTAMP, ACTION_NAME, INSTANCE\\n"
+        "Regles importantes :\\n"
+        f"- Tu ne dois interroger QU'UNE SEULE table : {table_name}\\n"
+        "- N'utilise jamais DBA_USERS, ALL_USERS, USER_USERS ni aucune autre table/vue\\n"
+        "- Pour compter des utilisateurs, utiliser COUNT(DISTINCT DBUSERNAME) et ignorer NULL\\n"
+        "- Colonne utilisateur = DBUSERNAME\\n"
+        "- Colonne timestamp = EVENT_TIMESTAMP\\n"
+        "- Colonne objet = OBJECT_NAME\\n"
+        "- Colonne hote = USERHOST\\n"
+        "- connexion = LOGON, deconnexion = LOGOFF, lecture = SELECT\\n"
+        "- Reponds uniquement en SQL Oracle valide."
+    )
 
 _TOKENIZER: Any = None
 _MODEL: Any = None
@@ -52,10 +54,10 @@ def model_status() -> tuple[str, str | None]:
     if _MODEL is not None and _TOKENIZER is not None:
         return "loaded", None
     if _MODEL_ERROR:
-        return "fallback", _MODEL_ERROR
+        return "error", _MODEL_ERROR
     if not _MODEL_STACK_AVAILABLE:
         _MODEL_ERROR = "torch/transformers/peft indisponibles"
-        return "fallback", _MODEL_ERROR
+        return "error", _MODEL_ERROR
 
     try:
         _TOKENIZER = AutoTokenizer.from_pretrained(settings.model_dir)
@@ -73,7 +75,7 @@ def model_status() -> tuple[str, str | None]:
         _TOKENIZER = None
         _MODEL = None
         _DEVICE = None
-        return "fallback", _MODEL_ERROR
+        return "error", _MODEL_ERROR
 
 
 def apply_default_row_limit(sql: str, default_limit: int = 200) -> str:
@@ -88,7 +90,7 @@ def apply_default_row_limit(sql: str, default_limit: int = 200) -> str:
 
 def _post_process_sql(sql: str) -> str:
     # Normalize trained placeholder table names to runtime Oracle table.
-    return re.sub(r"\bORACLE_AUDIT_TRAIL\b", settings.oracle_table, sql, flags=re.IGNORECASE)
+    return re.sub(r"\bORACLE_AUDIT_TRAIL\b", get_oracle_table(), sql, flags=re.IGNORECASE)
 
 
 def _clean_sql(raw: str, question: str = "") -> str:
@@ -107,7 +109,7 @@ def _clean_sql(raw: str, question: str = "") -> str:
         sql = sql[: sql.index(";") + 1]
 
     sql = _post_process_sql(sql.strip())
-    sql = apply_default_row_limit(sql, settings.default_fetch_limit)
+    sql = apply_default_row_limit(sql, get_fetch_limit())
     ok, reason = validate_sql_guardrails(sql)
     if not ok:
         return f"-- blocked: {reason}"
@@ -119,8 +121,9 @@ def _generate_sql_with_model(question: str) -> str:
     if status != "loaded":
         return f"-- blocked: TinyLlama indisponible ({err})"
 
+    oracle_table = get_oracle_table()
     prompt = (
-        f"<|system|>{SYSTEM_PROMPT}<|end|>"
+        f"<|system|>{_system_prompt(oracle_table)}<|end|>"
         f"<|user|>{question}<|end|>"
         "<|assistant|>"
     )
@@ -167,7 +170,7 @@ def validate_sql_guardrails(sql: str) -> tuple[bool, str]:
     if not refs:
         return False, "No table reference found"
 
-    allowed = settings.oracle_table.upper()
+    allowed = get_oracle_table().upper()
     for ref in refs:
         clean_ref = ref.strip('"')
         if clean_ref != allowed:
@@ -176,31 +179,5 @@ def validate_sql_guardrails(sql: str) -> tuple[bool, str]:
     return True, "OK"
 
 
-def _generate_sql_fallback(question: str) -> str:
-    q = (question or "").strip().lower()
-
-    if "combien" in q and "utilisateur" in q:
-        sql = f"SELECT COUNT(DISTINCT DBUSERNAME) AS NB_UTILISATEURS FROM {settings.oracle_table} WHERE DBUSERNAME IS NOT NULL"
-    elif "connexion" in q or "connect" in q:
-        sql = (
-            f"SELECT DBUSERNAME, EVENT_TIMESTAMP, USERHOST FROM {settings.oracle_table} "
-            "WHERE ACTION_NAME='LOGON' ORDER BY EVENT_TIMESTAMP DESC"
-        )
-    else:
-        sql = (
-            f"SELECT ID, DBUSERNAME, ACTION_NAME, OBJECT_NAME, EVENT_TIMESTAMP FROM {settings.oracle_table} "
-            "ORDER BY EVENT_TIMESTAMP DESC"
-        )
-
-    sql = apply_default_row_limit(sql, settings.default_fetch_limit)
-    ok, reason = validate_sql_guardrails(sql)
-    if not ok:
-        return f"-- blocked: {reason}"
-    return sql + ";"
-
-
 def generate_sql_from_question(question: str) -> str:
-    sql = _generate_sql_with_model(question)
-    if sql.strip().startswith("-- blocked: TinyLlama indisponible"):
-        return _generate_sql_fallback(question)
-    return sql
+    return _generate_sql_with_model(question)

@@ -40,8 +40,12 @@ class Settings:
         )
     )
     max_sql_tokens: int = int(os.getenv("MAX_SQL_TOKENS", "160"))
-    default_fetch_limit: int = int(os.getenv("DEFAULT_FETCH_LIMIT", "200"))
+    default_fetch_limit: int = int(os.getenv("DEFAULT_FETCH_LIMIT", "10"))
     dashboard_row_cap: int = int(os.getenv("DASHBOARD_ROW_CAP", "5000"))
+    oracle_pool_min: int = int(os.getenv("ORACLE_POOL_MIN", "1"))
+    oracle_pool_max: int = int(os.getenv("ORACLE_POOL_MAX", "8"))
+    oracle_pool_increment: int = int(os.getenv("ORACLE_POOL_INCREMENT", "1"))
+    max_concurrent_queries_per_user: int = int(os.getenv("MAX_CONCURRENT_QUERIES_PER_USER", "2"))
 
     @property
     def oracle_dsn(self) -> str:
