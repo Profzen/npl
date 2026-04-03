@@ -1,0 +1,191 @@
+{
+  "benchmark_name": "benchmark_regression_v11_targeted",
+  "total_questions": 10,
+  "passed": 4,
+  "failed": 6,
+  "pass_rate": 0.4,
+  "historical_failed_subset": {
+    "total": 7,
+    "passed": 3,
+    "failed": 4,
+    "pass_rate": 0.4286,
+    "baseline_previous_lora_pass_rate": 0.0
+  },
+  "similar_variant_subset": {
+    "total": 3,
+    "passed": 1,
+    "failed": 2,
+    "pass_rate": 0.3333
+  },
+  "oracle_table": "SMART2DSECU.UNIFIED_AUDIT_DATA",
+  "details": [
+    {
+      "id": "q1_user_count",
+      "question": "combien d'utilisateur a t'on dans la base",
+      "historical_failed": true,
+      "sql": "SELECT COUNT(*) AS NB FROM DBA_USERS;",
+      "executed": false,
+      "row_count": 0,
+      "oracle_error": "ORA-00942: table or view does not exist\nHelp: https://docs.oracle.com/error-help/db/ora-00942/",
+      "checks": [
+        "FAIL: table cible absente",
+        "FAIL: manque /COUNT\\s*\\(\\s*DISTINCT\\s+DBUSERNAME\\s*\\)/",
+        "FAIL: manque /FROM\\s+SMART2DSECU\\.UNIFIED_AUDIT_DATA/",
+        "PASS: interdit absent /FROM\\s+DISTINCT\\s+DBUSERNAME/",
+        "FAIL: execution Oracle KO (ORA-00942: table or view does not exist\nHelp: https://docs.oracle.com/error-help/db/ora-00942/)"
+      ],
+      "passed": false
+    },
+    {
+      "id": "q5_tables_week",
+      "question": "Quelles sont les 5 tables les plus utilisees cette semaine ?",
+      "historical_failed": true,
+      "sql": "SELECT OBJECT_NAME, COUNT(*) AS NB FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE ACTION_NAME='SELECT' AND OBJECT_NAME IS NOT NULL AND EVENT_TIMESTAMP>=SYSDATE-7 GROUP BY OBJECT_NAME ORDER BY NB DESC FETCH FIRST 5 ROWS ONLY;",
+      "executed": true,
+      "row_count": 0,
+      "oracle_error": "",
+      "checks": [
+        "PASS: contient /OBJECT_NAME/",
+        "PASS: contient /GROUP\\s+BY\\s+OBJECT_NAME/",
+        "PASS: contient /FETCH\\s+FIRST\\s+5\\s+ROWS\\s+ONLY/",
+        "PASS: interdit absent /GROUP\\s+BY\\s+DBUSERNAME/",
+        "PASS: execution Oracle OK"
+      ],
+      "passed": true
+    },
+    {
+      "id": "q6_create_accounts_30d",
+      "question": "Y a-t-il eu des creations de comptes sur les 30 derniers jours ?",
+      "historical_failed": true,
+      "sql": "SELECT DBUSERNAME, OBJECT_NAME, EVENT_TIMESTAMP FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE ACTION_NAME='CREATE USER' AND TRUNC(EVENT_TIMESTAMP) >= TRUNC(SYSDATE-30) ORDER BY EVENT_TIMESTAMP DESC;",
+      "executed": true,
+      "row_count": 0,
+      "oracle_error": "",
+      "checks": [
+        "PASS: contient /CREATE\\s+USER/",
+        "PASS: contient /SYSDATE\\s*-\\s*30|SYSDATE-30/",
+        "PASS: interdit absent /DELETE\\s+USER/",
+        "PASS: execution Oracle OK"
+      ],
+      "passed": true
+    },
+    {
+      "id": "q9_most_active_host_month",
+      "question": "Quel poste a ete le plus actif ce mois-ci ?",
+      "historical_failed": true,
+      "sql": "SELECT DBUSERNAME, COUNT(*) AS NB FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE TRUNC(EVENT_TIMESTAMP,'MM')=TRUNC(SYSDATE,'MM') GROUP BY DBUSERNAME ORDER BY NB DESC FETCH FIRST 1 ROWS ONLY;",
+      "executed": true,
+      "row_count": 0,
+      "oracle_error": "",
+      "checks": [
+        "FAIL: manque /USERHOST/",
+        "FAIL: manque /GROUP\\s+BY\\s+USERHOST/",
+        "PASS: contient /TRUNC\\s*\\(\\s*EVENT_TIMESTAMP\\s*,\\s*'MM'\\s*\\)/",
+        "FAIL: contient interdit /GROUP\\s+BY\\s+DBUSERNAME/",
+        "PASS: execution Oracle OK"
+      ],
+      "passed": false
+    },
+    {
+      "id": "q11_objects_48h",
+      "question": "Sur les 48 dernieres heures, quels objets ont le plus change ?",
+      "historical_failed": true,
+      "sql": "SELECT OBJECT_NAME, COUNT(*) AS NB FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE ACTION_NAME IN ('INSERT','UPDATE','DELETE') AND EVENT_TIMESTAMP >= SYSDATE-2 ORDER BY NB DESC FETCH FIRST 48 ROWS ONLY;",
+      "executed": false,
+      "row_count": 0,
+      "oracle_error": "ORA-00937: not a single-group group function\nHelp: https://docs.oracle.com/error-help/db/ora-00937/",
+      "checks": [
+        "PASS: contient /OBJECT_NAME/",
+        "FAIL: manque /GROUP\\s+BY\\s+OBJECT_NAME/",
+        "PASS: contient /SYSDATE\\s*-\\s*2|SYSDATE-2|INTERVAL\\s*'48'\\s*HOUR/",
+        "PASS: interdit absent /GROUP\\s+BY\\s+DBUSERNAME/",
+        "PASS: interdit absent /SYSDATE\\s*-\\s*7|SYSDATE-7/",
+        "FAIL: execution Oracle KO (ORA-00937: not a single-group group function\nHelp: https://docs.oracle.com/error-help/db/ora-00937/)"
+      ],
+      "passed": false
+    },
+    {
+      "id": "q13_last_action",
+      "question": "Qui a fait la toute derniere action dans les traces ?",
+      "historical_failed": true,
+      "sql": "SELECT DBUSERNAME, ACTION_NAME, EVENT_TIMESTAMP FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE TRUNC(EVENT_TIMESTAMP) = TRUNC(SYSDATE-1) ORDER BY EVENT_TIMESTAMP DESC;",
+      "executed": true,
+      "row_count": 0,
+      "oracle_error": "",
+      "checks": [
+        "PASS: contient /ORDER\\s+BY\\s+EVENT_TIMESTAMP\\s+DESC/",
+        "FAIL: manque /FETCH\\s+FIRST\\s+1\\s+ROWS\\s+ONLY/",
+        "FAIL: contient interdit /TRUNC\\s*\\(\\s*EVENT_TIMESTAMP\\s*\\)\\s*=\\s*TRUNC\\s*\\(\\s*SYSDATE\\s*-\\s*1\\s*\\)/",
+        "PASS: execution Oracle OK"
+      ],
+      "passed": false
+    },
+    {
+      "id": "q15_top3_objects",
+      "question": "Quels sont les 3 objets les plus modifies ?",
+      "historical_failed": true,
+      "sql": "SELECT OBJECT_NAME, COUNT(*) AS NB FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE ACTION_NAME IN ('INSERT','UPDATE','DELETE') GROUP BY OBJECT_NAME ORDER BY NB DESC FETCH FIRST 3 ROWS ONLY;",
+      "executed": true,
+      "row_count": 1,
+      "oracle_error": "",
+      "checks": [
+        "PASS: contient /OBJECT_NAME/",
+        "PASS: contient /GROUP\\s+BY\\s+OBJECT_NAME/",
+        "PASS: contient /FETCH\\s+FIRST\\s+3\\s+ROWS\\s+ONLY/",
+        "PASS: interdit absent /GROUP\\s+BY\\s+DBUSERNAME/",
+        "PASS: execution Oracle OK"
+      ],
+      "passed": true
+    },
+    {
+      "id": "v1_top5_objects_week",
+      "question": "Donne les 5 objets les plus utilises sur les 7 derniers jours.",
+      "historical_failed": false,
+      "sql": "SELECT OBJECT_NAME, COUNT(*) AS NB FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE ACTION_NAME='SELECT' AND OBJECT_NAME IS NOT NULL AND EVENT_TIMESTAMP>=SYSDATE-5 GROUP BY OBJECT_NAME ORDER BY NB DESC FETCH FIRST 5 ROWS ONLY;",
+      "executed": true,
+      "row_count": 0,
+      "oracle_error": "",
+      "checks": [
+        "PASS: contient /OBJECT_NAME/",
+        "PASS: contient /GROUP\\s+BY\\s+OBJECT_NAME/",
+        "PASS: contient /FETCH\\s+FIRST\\s+5\\s+ROWS\\s+ONLY/",
+        "PASS: interdit absent /GROUP\\s+BY\\s+DBUSERNAME/",
+        "PASS: execution Oracle OK"
+      ],
+      "passed": true
+    },
+    {
+      "id": "v2_host_month",
+      "question": "Quel USERHOST est le plus actif ce mois ?",
+      "historical_failed": false,
+      "sql": "SELECT DBUSERNAME, COUNT(*) AS NB FROM SMART2DSECU.UNIFIED_AUDIT_DATA GROUP BY DBUSERNAME ORDER BY NB DESC FETCH FIRST 1 ROWS ONLY;",
+      "executed": true,
+      "row_count": 1,
+      "oracle_error": "",
+      "checks": [
+        "FAIL: manque /USERHOST/",
+        "FAIL: manque /GROUP\\s+BY\\s+USERHOST/",
+        "PASS: contient /FETCH\\s+FIRST\\s+1\\s+ROWS\\s+ONLY/",
+        "FAIL: contient interdit /GROUP\\s+BY\\s+DBUSERNAME/",
+        "PASS: execution Oracle OK"
+      ],
+      "passed": false
+    },
+    {
+      "id": "v3_last_event_no_day_filter",
+      "question": "Donne la derniere action globale en base, sans filtrer sur hier.",
+      "historical_failed": false,
+      "sql": "SELECT ID, EVENT_TIMESTAMP, DBUSERNAME, ACTION_NAME, OBJECT_NAME, EVENT_TYPE FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE TRUNC(EVENT_TIMESTAMP)=TRUNC(SYSDATE-1) ORDER BY EVENT_TIMESTAMP DESC;",
+      "executed": false,
+      "row_count": 0,
+      "oracle_error": "ORA-00904: \"EVENT_TYPE\": invalid identifier\nHelp: https://docs.oracle.com/error-help/db/ora-00904/",
+      "checks": [
+        "PASS: contient /ORDER\\s+BY\\s+EVENT_TIMESTAMP\\s+DESC/",
+        "FAIL: manque /FETCH\\s+FIRST\\s+1\\s+ROWS\\s+ONLY/",
+        "FAIL: contient interdit /SYSDATE\\s*-\\s*1|SYSDATE-1/",
+        "FAIL: execution Oracle KO (ORA-00904: \"EVENT_TYPE\": invalid identifier\nHelp: https://docs.oracle.com/error-help/db/ora-00904/)"
+      ],
+      "passed": false
+    }
+  ]
+}

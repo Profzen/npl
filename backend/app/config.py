@@ -21,7 +21,8 @@ class Settings:
     oracle_table: str = os.getenv("ORACLE_TABLE", "SMART2DSECU.UNIFIED_AUDIT_DATA")
     cors_origins: list[str] = field(
         default_factory=lambda: os.getenv(
-            "BACKEND_CORS_ORIGINS", "http://localhost:5173"
+            "BACKEND_CORS_ORIGINS",
+            "http://localhost:3000,http://127.0.0.1:3000,http://localhost:5173,http://127.0.0.1:5173",
         ).split(",")
     )
     model_dir: str = field(

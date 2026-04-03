@@ -1,0 +1,188 @@
+Résumé pour Copilot
+
+Problème
+L'inférence TinyLlama dans le backend ASKSMART prend 20-30 secondes par question, ce qui rend l'expérience utilisateur inacceptable.
+Causes identifiées
+
+Inférence sur CPU — TinyLlama 1.1B en float16 = ~2.4 GB de poids à traiter token par token sur CPU
+Format PyTorch non optimisé — les fichiers .safetensors HuggingFace ne sont pas conçus pour l'inférence CPU rapide
+Chargement du modèle — si le cache n'est pas bien géré, rechargement à chaque requête (+5-10s)
+max_new_tokens trop grand — génération jusqu'à 120 tokens alors que le SQL Oracle dépasse rarement 80 tokens
+
+Meilleure solution retenue
+Conversion en GGUF Q4_K_M via llama.cpp — même approche que Phi-3 déjà en place dans le projet. Résultat attendu : 4-6 secondes au lieu de 20-30s sur CPU.
+Ce qu'on a fait dans le notebook V12
+Ajout de 4 cellules après l'entraînement :
+
+Cellule 14 — Fusion TinyLlama base + LoRA V12 en un seul modèle HuggingFace complet
+Cellule 15 — Clone + build de llama.cpp (outil de conversion)
+Cellule 16 — Conversion du modèle fusionné en GGUF fp16 (~2.2 GB)
+Cellule 17 — Quantification Q4_K_M → tinyllama_oracle_v12_q4.gguf (~600 MB)
+
+Ce qu'on va désormais récupérer depuis Colab
+Avant : TinyLlama-1.1B-Chat-v1.0/ (dossier ~2.2 GB) + tinyllama_oracle_lora/ (dossier LoRA)
+Après : un seul fichier tinyllama_oracle_v12_q4.gguf (~600 MB)
+Ajustements à faire dans le backend ASKSMART
+Avant (PyTorch + PEFT) :
+pythonfrom transformers import AutoTokenizer, AutoModelForCausalLM
+from peft import PeftModel
+
+tokenizer  = AutoTokenizer.from_pretrained("TinyLlama-1.1B-Chat-v1.0")
+base_model = AutoModelForCausalLM.from_pretrained("TinyLlama-1.1B-Chat-v1.0")
+model      = PeftModel.from_pretrained(base_model, "tinyllama_oracle_lora")
+Après (llama-cpp-python) :
+pythonfrom llama_cpp import Llama
+
+llm = Llama(
+    model_path="tinyllama_oracle_v12_q4.gguf",
+    n_ctx=512,
+    n_threads=4,       # à ajuster selon CPU
+    verbose=False,
+)
+Génération SQL :
+pythondef generate_sql(question: str) -> str:
+    prompt = f"<|system|>{SYSTEM_PROMPT}<|end|><|user|>{question}<|end|><|assistant|>"
+    output = llm(
+        prompt,
+        max_tokens=80,
+        stop=["<|end|>", "<|user|>"],
+        echo=False,
+    )
+    return output["choices"][0]["text"].strip()
+Propositions d'optimisation à soumettre à Copilot
+
+n_threads — mettre le nombre de cœurs physiques du CPU du serveur (pas les threads logiques). Ex : CPU 4 cœurs = n_threads=4. Valeur trop haute dégrade les performances.
+n_ctx=512 — suffisant pour le prompt ASKSMART (~330 tokens) + réponse SQL (~80 tokens). Ne pas mettre plus, ça consomme de la RAM inutilement.
+max_tokens=80 — le SQL Oracle généré dépasse rarement 75 tokens. Réduire de 120 à 80 élimine les tokens superflus.
+Chargement unique au démarrage FastAPI — le modèle doit être instancié une seule fois dans le lifecycle de l'app, pas dans la fonction de requête :
+
+python@app.on_event("startup")
+async def startup():
+    app.state.llm = Llama(model_path="tinyllama_oracle_v12_q4.gguf", n_ctx=512, n_threads=4)
+
+use_mmap=True (déjà activé par défaut dans llama-cpp-python) — le fichier GGUF est mappé en mémoire, pas entièrement chargé. Première requête légèrement plus lente, les suivantes très rapides.
+Si GPU disponible — ajouter n_gpu_layers=-1 pour décharger toutes les couches sur GPU → temps réduit à ~1s.
+
+
+TinyLlama simple + dossier LoRA encore nécessaires ?
+Non, plus nécessaires pour la production. Le GGUF contient déjà la fusion des deux. Garder en backup dans le projet VS Code c'est une bonne idée, mais le backend n'en a plus besoin au runtime.
+
+Est-ce que le notebook + GGUF va vraiment impacter le temps même avec un cache modèle ?
+Bonne question. Il faut distinguer deux choses :
+Le cache modèle (ton @cache_resource Streamlit ou variable globale FastAPI) évite de recharger les poids depuis le disque à chaque requête — c'est déjà bien. Mais il ne change pas la vitesse d'inférence une fois le modèle en mémoire.
+Le vrai goulot d'étranglement c'est que PyTorch exécute les multiplications matricielles en float16 sur CPU, ce qui est lent car le CPU n'est pas optimisé pour ça.
+llama.cpp fait quelque chose de fondamentalement différent : il utilise des instructions CPU spécialisées (AVX2, NEON) et des noyaux de calcul écrits en C++ optimisés pour la quantification Q4. Sur le même CPU, le même nombre de tokens se génère 4 à 6 fois plus vite — pas parce qu'on charge moins, mais parce que chaque token se calcule plus vite.
+Donc même si tu avais déjà un cache parfait en PyTorch, la conversion GGUF reste un gain réel et significatif sur la vitesse de génération.
+
+Les logs sont très clairs. Voici l'analyse :
+generate_sql    = 25.693s   ← TinyLlama PyTorch sur CPU
+execute_oracle  =  0.006s   ← Oracle ultra-rapide, rien à faire ici
+build_synthesis = 40.807s   ← Phi-3 GGUF sur CPU
+history_audit   =  0.009s   ← négligeable
+─────────────────────────────
+TOTAL           = 66.516s
+
+Deux problèmes, pas un.
+Tu pensais que c'était surtout TinyLlama qui était lent — c'est vrai, 25s c'est mauvais. Mais Phi-3 est encore plus lent : 40s. C'est lui le vrai goulot d'étranglement.
+
+Causes probables pour Phi-3 à 40s
+Phi-3 mini même en Q4_K_M fait ~2.3 GB et est plus grand que TinyLlama. Sa synthèse produit une réponse en français de 100-200 tokens, alors que TinyLlama ne génère que ~60-80 tokens de SQL. Plus de tokens à générer = plus lent.
+Deux choses à vérifier dans ton code Phi-3 :
+1. max_tokens trop grand ?
+python# Si tu as ça quelque part
+output = llm(prompt, max_tokens=512)  # beaucoup trop
+# Mettre
+output = llm(prompt, max_tokens=150)  # largement suffisant pour une synthèse
+2. n_ctx trop grand ?
+pythonLlama(model_path="phi3.gguf", n_ctx=4096)  # inutilement grand
+# Mettre
+Llama(model_path="phi3.gguf", n_ctx=1024)  # suffisant pour SQL + résultat + synthèse
+
+Priorités d'action
+ActionGain estiméConvertir TinyLlama → GGUF Q4 (notebook V12)25s → 4-6sRéduire max_tokens Phi-3 à 15040s → 15-20sRéduire n_ctx Phi-3 à 1024gain mémoire + vitessen_threads = nb cœurs physiques réels-20% sur les deux
+Avec juste ces ajustements sans GPU tu devrais passer de 66s à ~20-25s total. Avec le GGUF TinyLlama en plus, ~18-22s. Pour descendre vraiment sous 10s il faudra un GPU.
+
+C'est bien le bon fichier. Voici l'analyse directe :
+Le problème principal :
+python_PHI3_MODEL = Llama(model_path=settings.phi3_path, n_ctx=2048, n_gpu_layers=0, verbose=False)
+n_ctx=2048 — c'est trop grand. Ton prompt Phi-3 ne dépasse jamais 800-900 tokens (SYSTEM_PROMPT + question + résultat tronqué à 1200 chars). Mettre 1024 suffit largement.
+pythonresp = _PHI3_MODEL(prompt, max_tokens=300, ...)
+max_tokens=300 — une synthèse de 2-5 phrases fait rarement plus de 120 tokens. Tu génères potentiellement le double de ce qui est nécessaire.
+
+Les deux changements à faire :
+python# Ligne de chargement — changer n_ctx et ajouter n_threads
+_PHI3_MODEL = Llama(
+    model_path=settings.phi3_path,
+    n_ctx=1024,          # était 2048
+    n_gpu_layers=0,
+    n_threads=4,         # à adapter selon ton CPU
+    verbose=False,
+)
+
+# Appel inférence — réduire max_tokens
+resp = _PHI3_MODEL(
+    prompt,
+    max_tokens=150,      # était 300
+    temperature=0.15,
+    repeat_penalty=1.05,
+    stop=["<|end|>", "<|user|>", "Instruction 2", "Instruction:"],
+)
+
+Ce que ça va changer sur tes 40s :
+n_ctx=1024 au lieu de 2048 réduit la mémoire allouée par token et accélère les calculs d'attention. max_tokens=150 au lieu de 300 coupe le temps de génération maximum de moitié dans le pire cas.
+Estimation : 40s → 20-25s juste avec ça, sans rien changer d'autre.
+
+Ce que ça ne changera pas :
+La qualité de la synthèse. Tes réponses Phi-3 actuelles font entre 3 et 6 phrases. Elles s'arrêtent au token <|end|> naturellement bien avant 150 tokens. Tu ne coupes rien.
+
+Une chose que j'ai remarquée aussi :
+pythonresultat_brut = _rows_to_nlp_text(rows)
+prompt = (... f"Resultat : {resultat_brut[:1200]}<|end|>" ...)
+Tu as déjà une fonction _rule_synthesis() très bien faite qui produit une synthèse règle-par-règle sans Phi-3. Elle est définie mais jamais appelée dans build_synthesis(). Tu pourrais l'utiliser comme fallback rapide pour les cas simples (COUNT, 1 ligne) et réserver Phi-3 uniquement pour les résultats multi-lignes complexes. Ça éviterait d'appeler Phi-3 sur des questions dont la réponse est juste un chiffre.
+
+Oui, plusieurs choses visibles directement dans ce code.
+
+Problème 1 — Chargement du modèle sans optimisation mémoire
+pythonbase = AutoModelForCausalLM.from_pretrained(settings.model_dir)
+_MODEL = PeftModel.from_pretrained(base, settings.lora_dir)
+Pas de torch_dtype=torch.float16 — le modèle charge en float32 par défaut, ce qui double la mémoire utilisée (~4.4 GB au lieu de ~2.2 GB) et ralentit tous les calculs. C'est probablement la cause principale de tes 25s.
+Fix immédiat :
+pythonbase = AutoModelForCausalLM.from_pretrained(
+    settings.model_dir,
+    torch_dtype=torch.float16,
+    low_cpu_mem_usage=True,
+)
+
+Problème 2 — max_length=1024 sur le tokenizer
+pythoninputs = _TOKENIZER(prompt, return_tensors="pt", truncation=True, max_length=1024)
+Le prompt réel fait ~330 tokens (on l'a mesuré dans le notebook). Mettre 1024 ici est sans impact négatif mais inutile — 512 suffit et c'est plus cohérent avec le notebook.
+
+Problème 3 — max_new_tokens depuis settings
+pythonout = _MODEL.generate(**inputs, max_new_tokens=settings.max_sql_tokens, ...)
+On ne sait pas ce que vaut settings.max_sql_tokens. Si c'est 120 ou plus, c'est trop. Le SQL Oracle ne dépasse jamais 80 tokens. Vérifie cette valeur dans ton config.py.
+
+Problème 4 — repetition_penalty absent
+Sans repetition_penalty, le modèle peut boucler sur des tokens répétitifs et aller jusqu'à max_new_tokens inutilement. Ajouter repetition_penalty=1.1 force l'arrêt plus tôt sur les vraies fins de SQL.
+
+Ce que ça donne corrigé :
+pythonbase = AutoModelForCausalLM.from_pretrained(
+    settings.model_dir,
+    torch_dtype=torch.float16,
+    low_cpu_mem_usage=True,
+)
+_MODEL = PeftModel.from_pretrained(base, settings.lora_dir)
+_MODEL.eval()
+_DEVICE = torch.device("cpu")
+_MODEL.to(_DEVICE)
+pythonout = _MODEL.generate(
+    **inputs,
+    max_new_tokens=80,        # était settings.max_sql_tokens
+    do_sample=False,
+    repetition_penalty=1.1,   # nouveau
+    pad_token_id=_TOKENIZER.eos_token_id,
+)
+
+Résumé impact estimé
+ProblèmeCauseGain estiméfloat32 au lieu de float16calculs 2x plus lourds-8 à -12smax_new_tokens trop grandgénère des tokens inutiles-2 à -4srepetition_penalty absentpeut boucler-1 à -3s
+Juste le fix float16 devrait faire tomber TinyLlama de 25s à ~12-15s. Combiné avec le GGUF Q4 du notebook V12, tu descends à 4-6s.
+Donne-moi la valeur de max_sql_tokens dans ton config.py.

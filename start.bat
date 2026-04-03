@@ -14,16 +14,16 @@ start "SMART2D Backend" cmd /k "cd /d C:\dossier3\nlp\backend && ..\venv_nlp\Scr
 timeout /t 3 /nobreak >nul
 
 :: Frontend dans une nouvelle fenetre
-echo [2/2] Lancement du Frontend Vite (port 5173)...
+echo [2/2] Lancement du Frontend Next.js (port 3000)...
 start "SMART2D Frontend" cmd /k "set PATH=C:\Program Files\nodejs;%PATH% && cd /d C:\dossier3\nlp\frontend && npm run dev"
 
-:: Attendre 4s que Vite demarre
-timeout /t 4 /nobreak >nul
+:: Attendre 5s que Next.js demarre
+timeout /t 5 /nobreak >nul
 
 :: Ouvrir le navigateur
 echo.
-echo Ouverture de http://localhost:5173 ...
-start http://localhost:5173
+echo Ouverture de http://localhost:3000 ...
+start http://localhost:3000
 
 echo.
 echo Les deux serveurs tournent dans leurs fenetres separees.

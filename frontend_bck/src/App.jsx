@@ -488,6 +488,7 @@ export default function App() {
     && (result.rows?.length || 0) <= 8
     && (result.synthesis?.length || 0) <= 350
     && (result.sql?.length || 0) <= 900
+  const hasActiveQuestionFlow = loading || !!result
 
   const goToPanel = useCallback((panelId) => {
     setPage('home')
@@ -830,19 +831,23 @@ export default function App() {
                 {t.ask_intro}
               </p>
 
-              {renderSearchBar('hero')}
+              {!hasActiveQuestionFlow && (
+                <>
+                  {renderSearchBar('hero')}
 
-              <div className="quick-chips">
-                {(lang === 'fr'
-                  ? ['Connexions du jour', 'TOP 10 utilisateurs', 'Dernieres suppressions', 'Objets modifies']
-                  : ['Today\'s connections', 'TOP 10 users', 'Recent deletions', 'Modified objects']
-                ).map(q => (
-                  <button key={q} className="qchip"
-                    onClick={() => { setQuestion(q); setTimeout(() => inputRef.current?.focus(), 50) }}>
-                    {q}
-                  </button>
-                ))}
-              </div>
+                  <div className="quick-chips">
+                    {(lang === 'fr'
+                      ? ['Connexions du jour', 'TOP 10 utilisateurs', 'Dernieres suppressions', 'Objets modifies']
+                      : ['Today\'s connections', 'TOP 10 users', 'Recent deletions', 'Modified objects']
+                    ).map(q => (
+                      <button key={q} className="qchip"
+                        onClick={() => { setQuestion(q); setTimeout(() => inputRef.current?.focus(), 50) }}>
+                        {q}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
             </section>
 
             {(result || loading) && (

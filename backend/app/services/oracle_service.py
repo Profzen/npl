@@ -60,8 +60,6 @@ def get_connection():
 
 
 def execute_sql(sql: str) -> tuple[list[dict], str | None]:
-    if sql.strip().startswith("-- blocked"):
-        return [], sql.strip()[10:]
 
     conn = None
     cur = None

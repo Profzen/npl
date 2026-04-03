@@ -267,25 +267,24 @@ def write_settings(payload: RuntimeSettings, current_user: dict = Depends(get_cu
 @app.post("/api/query", response_model=QueryResponse)
 def query(req: QueryRequest, current_user: dict = Depends(get_current_user)) -> QueryResponse:
     username = str(current_user["username"])
-
-    if not _acquire_user_query_slot(username):
-        write_audit_log(
-            username=username,
-            action="query_execute",
-            result_status="throttled",
-            question=req.question,
-            details=f"Limite simultanee atteinte ({MAX_CONCURRENT_QUERIES_PER_USER})",
-        )
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=f"Trop de requetes simultanees. Limite actuelle: {MAX_CONCURRENT_QUERIES_PER_USER}",
-        )
+    t0 = time.perf_counter()
 
     try:
+        t_sql_start = time.perf_counter()
         sql = generate_sql_from_question(req.question)
+        t_sql_end = time.perf_counter()
+
+        t_exec_start = time.perf_counter()
         rows, error = execute_sql(sql)
-        blocked = sql.strip().startswith("-- blocked")
+        t_exec_end = time.perf_counter()
+
+        blocked = False
+
+        t_syn_start = time.perf_counter()
         synthesis = build_synthesis(req.question, rows, error)
+        t_syn_end = time.perf_counter()
+
+        t_post_start = time.perf_counter()
         fetch_limit = get_fetch_limit()
 
         entry = {
@@ -304,10 +303,7 @@ def query(req: QueryRequest, current_user: dict = Depends(get_current_user)) -> 
 
         status_value = "ok"
         detail_value = "Execution terminee"
-        if blocked:
-            status_value = "blocked"
-            detail_value = "Requete bloquee par la garde SELECT"
-        elif error:
+        if error:
             status_value = "error"
             detail_value = error
 
@@ -321,6 +317,21 @@ def query(req: QueryRequest, current_user: dict = Depends(get_current_user)) -> 
             details=detail_value,
         )
 
+        t_post_end = time.perf_counter()
+        t_total = t_post_end - t0
+        print(
+            "[QUERY_TIMING] "
+            f"user={username} "
+            f"question_len={len(req.question)} "
+            f"total={t_total:.3f}s "
+            f"generate_sql={t_sql_end - t_sql_start:.3f}s "
+            f"execute_oracle={t_exec_end - t_exec_start:.3f}s "
+            f"build_synthesis={t_syn_end - t_syn_start:.3f}s "
+            f"history_audit={t_post_end - t_post_start:.3f}s "
+            f"rows={len(rows)} "
+            f"error={'yes' if error else 'no'}"
+        )
+
         return QueryResponse(
             question=req.question,
             sql=sql,
@@ -330,5 +341,14 @@ def query(req: QueryRequest, current_user: dict = Depends(get_current_user)) -> 
             blocked=blocked,
             error=error,
         )
+    except Exception as exc:
+        t_err = time.perf_counter() - t0
+        print(
+            "[QUERY_TIMING] "
+            f"user={username} "
+            f"failed_after={t_err:.3f}s "
+            f"error={type(exc).__name__}: {exc}"
+        )
+        raise
     finally:
         _release_user_query_slot(username)

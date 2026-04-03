@@ -1,0 +1,25 @@
+Titre du projet : Conception d'une plateforme de question-réponse sur des données d'audit basée sur NLP (Natural langage processing)
+
+Contexte et problématique
+Les données d’audit sont un ensemble d’information historisées qui permettent d’assurer la traçabilité.
+Ces données sont consulter afin d’assurer une surveillance de qui fais quoi et quand. Dans les entreprises certaines personne qui ne sont pas informaticien ont besoin de poser ces questions sur ces donné afin d’avoir des réponses claires. Notre défi est de pouvoir concevoir une plateforme capable d’aider ces profanes de d’informatique à pouvoir satisfaire ce besoin.
+Objectifs
+L'objectif général est de concevoir une plateforme capable de donner une réponse claire a une question (en français) posée sur des donnée d’audit
+Objectifs spécifiques :
+•	Mettre en place un système de question-réponse pour des données d’audit capable d’interpréter les questions posées et de donner des réponses compréhensibles par des personnes non informaticiennes.
+•	Concevoir une interface intitule et ergonomique afin de faciliter l’usage de système conçu.
+•	Assurer le fonctionnement de bout en bout du système sans aucun accès à la connexion internet.
+
+
+Méthodologie
+Il s'agit de de concevoir une plateforme capable de donner une réponse claire a une question (en français) posée sur des donnée d’audit :
+•	Couche d'interprétation NLP : Réception de la question en français, puis via un modèle de langage embarqué (Tinyllama fine-tuné), génération de la requête SQL*Plus ciblant les données d'audit et passage des résultats bruts au modèle (phi3 mini) pour la génération d'une réponse en français clair, lisible et compréhensible
+•	Conception d’une interface pour le système
+•	Connexion de l’interface au backend du système
+•	Réalisation des tests de fonctionnement
+
+Résultats attendus
+•	Une plateforme permettant au personne non informaticien de poser des questions sur des données d’audit et de recevoir une réponse claire et compréhensible, tout en étant pas exposé à internet.
+•	Un rapport de mémoire documentant l'architecture du système, les choix technologiques, les résultats des tests de performance et de précision, ainsi que les perspectives d'extension à d'autres données.
+
+

@@ -1,0 +1,12 @@
+{
+  "oracle_user": "aziz",
+  "oracle_password": "aziz",
+  "oracle_host": "192.168.132.177",
+  "oracle_port": 1791,
+  "oracle_service": "OSCARDB1",
+  "oracle_table": "SMART2DSECU.UNIFIED_AUDIT_DATA",
+  "interface_lang": "fr",
+  "max_results": 10,
+  "session_duration": 30,
+  "logs_retention": 90
+}
