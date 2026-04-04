@@ -3,6 +3,8 @@ from typing import Any
 
 from app.config import settings
 
+import os
+
 try:
     from llama_cpp import Llama
 
@@ -41,7 +43,15 @@ def phi3_status() -> tuple[str, str | None]:
         return "error", _PHI3_ERROR
 
     try:
-        _PHI3_MODEL = Llama(model_path=settings.phi3_path, n_ctx=2048, n_gpu_layers=0, verbose=False)
+        # V12 optimization: reduced n_ctx (1024 vs 2048) + n_threads for CPU
+        n_threads = max(1, min(settings.phi3_n_threads, os.cpu_count() or 4))
+        _PHI3_MODEL = Llama(
+            model_path=settings.phi3_path,
+            n_ctx=settings.phi3_n_ctx,
+            n_gpu_layers=0,
+            n_threads=n_threads,
+            verbose=False,
+        )
         return "loaded", None
     except Exception as exc:
         _PHI3_ERROR = str(exc)
@@ -204,11 +214,17 @@ def build_synthesis(question: str, rows: list[dict], error: str | None) -> str:
     if not rows:
         return "Aucune activite detectee pour cette demande."
 
+    # V12 optimization: Try fast rule-based synthesis first for simple cases
+    if settings.use_rule_synthesis_fallback and len(rows) <= 1:
+        fast_synth = _rule_synthesis(rows)
+        if fast_synth and "Aucune" not in fast_synth:
+            return fast_synth
+
     status, err = phi3_status()
     if status != "loaded":
         return f"Synthese indisponible: Phi3 non charge ({err})."
 
-    # LLM only for single-row explanations where it excels
+    # LLM only for multi-row or complex explanations
     resultat_brut = _rows_to_nlp_text(rows)
     prompt = (
         f"<|system|>{SYSTEM_PROMPT_FR}<|end|>"
@@ -218,9 +234,10 @@ def build_synthesis(question: str, rows: list[dict], error: str | None) -> str:
     )
 
     try:
+        # V12 optimization: reduced max_tokens (150 vs 300)
         resp = _PHI3_MODEL(
             prompt,
-            max_tokens=300,
+            max_tokens=settings.phi3_max_tokens,
             temperature=0.15,
             repeat_penalty=1.05,
             stop=["<|end|>", "<|user|>", "Instruction 2", "Instruction:"],
