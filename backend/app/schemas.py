@@ -17,6 +17,29 @@ class QueryResponse(BaseModel):
     error: str | None = None
 
 
+class QueryProgressStep(BaseModel):
+    key: str
+    label: str
+    summary: str
+    status: str
+    duration_seconds: float | None = None
+
+
+class QueryStartResponse(BaseModel):
+    request_id: str
+
+
+class QueryProgressResponse(BaseModel):
+    request_id: str
+    status: str
+    current_step: str | None = None
+    current_summary: str | None = None
+    elapsed_seconds: float
+    steps: list[QueryProgressStep]
+    result: QueryResponse | None = None
+    error: str | None = None
+
+
 class HealthResponse(BaseModel):
     status: str
     oracle: str

@@ -61,6 +61,25 @@ export interface QueryResponse {
   error: string | null
 }
 
+export interface QueryProgressStep {
+  key: string
+  label: string
+  summary: string
+  status: 'pending' | 'running' | 'completed' | 'error'
+  duration_seconds: number | null
+}
+
+export interface QueryProgress {
+  request_id: string
+  status: 'running' | 'completed' | 'error'
+  current_step: string | null
+  current_summary: string | null
+  elapsed_seconds: number
+  steps: QueryProgressStep[]
+  result: QueryResponse | null
+  error: string | null
+}
+
 // History types
 export interface HistoryEntry {
   id: string

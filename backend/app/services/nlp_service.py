@@ -1,14 +1,26 @@
+import os
 import re
 from typing import Any
 
 from app.config import settings
 from app.services.settings_service import get_fetch_limit, get_oracle_table
 
+# Limit PyTorch thread pools to prevent CPU monopolization
+# Must be set BEFORE importing torch
+os.environ['MKL_NUM_THREADS'] = '2'
+os.environ['NUMEXPR_NUM_THREADS'] = '2'
+os.environ['OMP_NUM_THREADS'] = '2'
+os.environ['TORCH_NUM_THREADS'] = '2'
+
 try:
     import torch
     from peft import PeftModel
     from transformers import AutoModelForCausalLM, AutoTokenizer
 
+    # Force PyTorch to respect thread limits
+    torch.set_num_threads(2)
+    torch.set_num_interop_threads(1)
+    
     _MODEL_STACK_AVAILABLE = True
 except Exception:
     torch = None

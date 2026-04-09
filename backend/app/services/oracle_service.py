@@ -12,10 +12,16 @@ from app.config import settings
 
 from app.services.settings_service import get_oracle_connection_config, get_oracle_table
 
+import time as time_module
+
 
 _POOL = None
 _POOL_CFG: tuple[str, str, str, int, str] | None = None
 _POOL_LOCK = Lock()
+# Metadata cache (TTL: 300s = 5 min)
+_METADATA_CACHE: tuple[list[dict], list[dict], str, float] | None = None
+_METADATA_CACHE_LOCK = Lock()
+_METADATA_CACHE_TTL_SECONDS = 300
 
 
 def _build_connection_config() -> tuple[str, str, str, int, str]:
@@ -93,6 +99,18 @@ def oracle_status() -> str:
 
 
 def fetch_metadata() -> tuple[list[dict], list[dict], str]:
+    global _METADATA_CACHE
+    
+    # Check cache first
+    with _METADATA_CACHE_LOCK:
+        if _METADATA_CACHE is not None:
+            users, objects, status, timestamp = _METADATA_CACHE
+            elapsed = time_module.time() - timestamp
+            if elapsed < _METADATA_CACHE_TTL_SECONDS:
+                print(f"[METADATA_CACHE_HIT] (cached {elapsed:.1f}s ago)")
+                return users, objects, status
+        # Cache expired or doesn't exist, fetch fresh
+    
     conn = None
     cur = None
     users: list[dict] = []
@@ -127,5 +145,9 @@ def fetch_metadata() -> tuple[list[dict], list[dict], str]:
             cur.close()
         if conn is not None:
             conn.close()
+    
+    # Store in cache
+    with _METADATA_CACHE_LOCK:
+        _METADATA_CACHE = (users, objects, status, time_module.time())
 
     return users, objects, status

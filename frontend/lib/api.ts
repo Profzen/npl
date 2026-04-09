@@ -5,6 +5,7 @@ import type {
   HealthStatus,
   Metadata,
   QueryRequest,
+  QueryProgress,
   QueryResponse,
   HistoryEntry,
   RuntimeSettings,
@@ -43,6 +44,10 @@ interface BackendAuditLogEntry {
   result_status: string
   row_count: number
   details: string
+}
+
+interface BackendQueryStartResponse {
+  request_id: string
 }
 
 export function getToken(): string | null {
@@ -140,6 +145,37 @@ export async function submitQuery(request: QueryRequest): Promise<QueryResponse>
   return {
     ...payload,
     blocked: false,
+  }
+}
+
+export async function submitTrackedQuery(
+  request: QueryRequest,
+  onProgress: (progress: QueryProgress) => void
+): Promise<QueryResponse> {
+  const startPayload = await apiFetch<BackendQueryStartResponse>('/query/start', {
+    method: 'POST',
+    body: JSON.stringify(request),
+  })
+
+  while (true) {
+    const progress = await apiFetch<QueryProgress>(`/query/progress/${startPayload.request_id}`)
+    onProgress(progress)
+
+    if (progress.status === 'completed') {
+      if (!progress.result) {
+        throw new ApiError(500, 'La requete est terminee mais aucun resultat n a ete renvoye.')
+      }
+      return {
+        ...progress.result,
+        blocked: false,
+      }
+    }
+
+    if (progress.status === 'error') {
+      throw new ApiError(500, progress.error || 'Une erreur est survenue pendant l analyse.')
+    }
+
+    await new Promise((resolve) => window.setTimeout(resolve, 500))
   }
 }
 

@@ -20,6 +20,9 @@ interface AppDataContextType {
   refreshSettings: () => Promise<void>
   refreshAll: () => Promise<void>
   markOracleActivity: () => void
+  startOracleQuery: () => void
+  endOracleQuerySuccess: () => void
+  endOracleQueryError: () => void
 }
 
 const AppDataContext = createContext<AppDataContextType | null>(null)
@@ -39,7 +42,7 @@ interface AppShellProps {
 export function AppShell({ children }: AppShellProps) {
   const router = useRouter()
   const { user, isLoading: authLoading, isAuthenticated } = useAuth()
-  const { status: oracleStatus, checkHealth, markActivity } = useOracleStatus()
+  const { status: oracleStatus, checkHealth, markActivity, forceInactive, startQuery, endQuerySuccess, endQueryError } = useOracleStatus()
   
   const [metadata, setMetadata] = useState<Metadata | null>(null)
   const [history, setHistory] = useState<HistoryEntry[]>([])
@@ -94,9 +97,9 @@ export function AppShell({ children }: AppShellProps) {
   useEffect(() => {
     if (isAuthenticated) {
       setDataLoading(true)
-      refreshAll().finally(() => setDataLoading(false))
+      refreshAll().finally(() => { setDataLoading(false); forceInactive() })
     }
-  }, [isAuthenticated, refreshAll])
+  }, [isAuthenticated, refreshAll, forceInactive])
 
   // Show loading while checking auth
   if (authLoading || (!isAuthenticated && !authLoading)) {
@@ -134,6 +137,9 @@ export function AppShell({ children }: AppShellProps) {
         refreshSettings,
         refreshAll,
         markOracleActivity: markActivity,
+        startOracleQuery: startQuery,
+        endOracleQuerySuccess: endQuerySuccess,
+        endOracleQueryError: endQueryError,
       }}
     >
       <SidebarProvider>

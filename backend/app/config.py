@@ -48,9 +48,9 @@ class Settings:
     oracle_pool_increment: int = int(os.getenv("ORACLE_POOL_INCREMENT", "1"))
     max_concurrent_queries_per_user: int = int(os.getenv("MAX_CONCURRENT_QUERIES_PER_USER", "2"))
     # Optimization V12 — Phi-3 synthesis
-    phi3_n_ctx: int = int(os.getenv("PHI3_N_CTX", "1024"))
+    phi3_n_ctx: int = int(os.getenv("PHI3_N_CTX", "512"))
     phi3_max_tokens: int = int(os.getenv("PHI3_MAX_TOKENS", "150"))
-    phi3_n_threads: int = int(os.getenv("PHI3_N_THREADS", "4"))
+    phi3_n_threads: int = int(os.getenv("PHI3_N_THREADS", "2"))
     use_rule_synthesis_fallback: bool = os.getenv("USE_RULE_SYNTHESIS_FALLBACK", "true").lower() == "true"
     # GGUF mode for TinyLlama (prepared for V12 from Colab)
     use_gguf_mode: bool = os.getenv("USE_GGUF_MODE", "false").lower() == "true"

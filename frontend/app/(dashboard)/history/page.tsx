@@ -132,7 +132,7 @@ export default function HistoryPage() {
             <CardContent className="flex-1 overflow-hidden p-0">
               {selectedEntry ? (
                 <ScrollArea className="h-full px-6 pb-6">
-                  <div className="space-y-4">
+                  <div className="space-y-4 pr-4">
                     {/* Status and Date */}
                     <div className="flex items-center justify-between">
                       <StatusBadge status={selectedEntry.status} />
@@ -147,7 +147,9 @@ export default function HistoryPage() {
                         <MessageSquare className="w-4 h-4 text-primary" />
                         <span className="text-sm font-medium">Question</span>
                       </div>
-                      <p className="text-sm bg-muted/50 p-3 rounded-lg">{selectedEntry.question}</p>
+                      <p className="text-sm bg-muted/50 p-3 rounded-lg whitespace-pre-wrap break-words leading-relaxed">
+                        {selectedEntry.question}
+                      </p>
                     </div>
 
                     {/* SQL */}
@@ -156,7 +158,7 @@ export default function HistoryPage() {
                         <Code className="w-4 h-4 text-primary" />
                         <span className="text-sm font-medium">SQL généré</span>
                       </div>
-                      <pre className="text-xs font-mono bg-muted/50 p-3 rounded-lg overflow-x-auto">
+                      <pre className="text-xs font-mono bg-muted/50 p-3 rounded-lg whitespace-pre-wrap break-all leading-relaxed">
                         {selectedEntry.sql}
                       </pre>
                     </div>
@@ -167,7 +169,7 @@ export default function HistoryPage() {
                         <Zap className="w-4 h-4 text-primary" />
                         <span className="text-sm font-medium">Synthèse</span>
                       </div>
-                      <p className="text-sm bg-muted/50 p-3 rounded-lg leading-relaxed">
+                      <p className="text-sm bg-muted/50 p-3 rounded-lg leading-relaxed whitespace-pre-wrap break-words">
                         {selectedEntry.synthesis}
                       </p>
                     </div>

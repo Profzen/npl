@@ -12,6 +12,8 @@ export function useOracleStatus() {
   const lastActivityRef = useRef<number>(Date.now())
   const inactivityTimerRef = useRef<NodeJS.Timeout | null>(null)
   const statusRef = useRef<OracleStatus>('disconnected')
+  // Blocks inactivity timeout while a query is running
+  const isQueryRunningRef = useRef(false)
 
   useEffect(() => {
     statusRef.current = status
@@ -41,10 +43,34 @@ export function useOracleStatus() {
     }
   }, [checkHealth])
 
-  // Check for inactivity
+  // Called after initial data load — go orange (inactive) if Oracle was connected
+  const forceInactive = useCallback(() => {
+    setStatus((current) => (current === 'connected' ? 'inactive' : current))
+  }, [])
+
+  // Called when a query starts — go green immediately, block inactivity timer
+  const startQuery = useCallback(() => {
+    isQueryRunningRef.current = true
+    setStatus('connected')
+    lastActivityRef.current = Date.now()
+  }, [])
+
+  // Called when query succeeds — stay green, reset inactivity timer
+  const endQuerySuccess = useCallback(() => {
+    isQueryRunningRef.current = false
+    lastActivityRef.current = Date.now()
+  }, [])
+
+  // Called when query fails — go red
+  const endQueryError = useCallback(() => {
+    isQueryRunningRef.current = false
+    setStatus('disconnected')
+  }, [])
+
+  // Check for inactivity — skipped while a query is running
   useEffect(() => {
     const checkInactivity = () => {
-      if (status === 'connected') {
+      if (status === 'connected' && !isQueryRunningRef.current) {
         const elapsed = Date.now() - lastActivityRef.current
         if (elapsed >= INACTIVE_TIMEOUT) {
           setStatus('inactive')
@@ -66,5 +92,9 @@ export function useOracleStatus() {
     isChecking,
     checkHealth,
     markActivity,
+    forceInactive,
+    startQuery,
+    endQuerySuccess,
+    endQueryError,
   }
 }
