@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback, useRef } from "react"
+import { useState, useCallback, useRef, useEffect } from "react"
 import {
   Search,
   Loader2,
@@ -13,8 +13,8 @@ import {
   ChevronDown,
   ChevronUp,
   SendHorizontal,
-  Eye,
   EyeOff,
+  Eye,
   CheckCircle2,
   ChevronRight,
   CircleAlert,
@@ -131,23 +131,56 @@ function getRunningStageDuration(progress: QueryProgress, step: QueryProgressSte
 }
 
 export default function HomePage() {
-  const { metadata, refreshMetadata, refreshHistory, markOracleActivity, startOracleQuery, endOracleQuerySuccess, endOracleQueryError } = useAppData()
+  const {
+    metadata,
+    refreshMetadata,
+    refreshHistory,
+    markOracleActivity,
+    startOracleQuery,
+    endOracleQuerySuccess,
+    endOracleQueryError,
+    showUsersColumn,
+    showTablesColumn,
+    showActionsColumn,
+    setShowUsersColumn,
+    setShowTablesColumn,
+    setShowActionsColumn,
+    selectedHistoryEntry,
+    setSelectedHistoryEntry,
+  } = useAppData()
   const [question, setQuestion] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [result, setResult] = useState<QueryResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [queryProgress, setQueryProgress] = useState<QueryProgress | null>(null)
-  const [showAnalysisDetails, setShowAnalysisDetails] = useState(true)
+  const [showAnalysisDetails, setShowAnalysisDetails] = useState(false)
   const [expandedUsers, setExpandedUsers] = useState(false)
   const [expandedTables, setExpandedTables] = useState(false)
   const [expandedActions, setExpandedActions] = useState(false)
 
-  const [showUsersColumn, setShowUsersColumn] = useState(true)
-  const [showTablesColumn, setShowTablesColumn] = useState(true)
-  const [showActionsColumn, setShowActionsColumn] = useState(true)
-
   const questionInputRef = useRef<HTMLTextAreaElement | null>(null)
   const responseAnchorRef = useRef<HTMLDivElement | null>(null)
+
+  // When a recent question is clicked in sidebar, display its saved result
+  useEffect(() => {
+    if (selectedHistoryEntry) {
+      setResult({
+        question: selectedHistoryEntry.question,
+        sql: selectedHistoryEntry.sql,
+        synthesis: selectedHistoryEntry.synthesis,
+        rows: selectedHistoryEntry.rows || [],
+        row_count: selectedHistoryEntry.row_count,
+        blocked: false,
+        error: selectedHistoryEntry.error,
+      })
+      setError(null)
+      setQueryProgress(null)
+      setSelectedHistoryEntry(null)
+      requestAnimationFrame(() => {
+        responseAnchorRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
+      })
+    }
+  }, [selectedHistoryEntry, setSelectedHistoryEntry])
 
   const handleQuestionChange = (nextValue: string) => {
     setQuestion(nextValue)
@@ -176,7 +209,6 @@ export default function HomePage() {
         duration_seconds: null,
       })),
     })
-    setShowAnalysisDetails(true)
     requestAnimationFrame(() => {
       responseAnchorRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
     })
@@ -220,8 +252,6 @@ export default function HomePage() {
 
   const usersCount = metadata?.users?.length || 0
   const tablesCount = metadata?.objects?.length || 0
-
-  const hasHiddenColumns = !showUsersColumn || !showTablesColumn || !showActionsColumn
 
   return (
     <div className="flex flex-col h-full">
@@ -316,7 +346,7 @@ export default function HomePage() {
                             onClick={() => setShowAnalysisDetails((value) => !value)}
                             title={showAnalysisDetails ? "Masquer les etapes" : "Afficher les etapes"}
                           >
-                            {showAnalysisDetails ? <ChevronUp className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                            {showAnalysisDetails ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                           </Button>
                         </div>
                       </div>
@@ -436,26 +466,6 @@ export default function HomePage() {
           </div>
 
           <div className="flex-none flex flex-col gap-2">
-            {hasHiddenColumns && (
-              <div className="flex items-center gap-2">
-                {!showUsersColumn && (
-                  <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setShowUsersColumn(true)}>
-                    <Eye className="w-3.5 h-3.5 mr-1" />Afficher Utilisateurs
-                  </Button>
-                )}
-                {!showTablesColumn && (
-                  <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setShowTablesColumn(true)}>
-                    <Eye className="w-3.5 h-3.5 mr-1" />Afficher Tables
-                  </Button>
-                )}
-                {!showActionsColumn && (
-                  <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setShowActionsColumn(true)}>
-                    <Eye className="w-3.5 h-3.5 mr-1" />Afficher Actions
-                  </Button>
-                )}
-              </div>
-            )}
-
             <div className="flex gap-3 items-stretch">
               {showUsersColumn && (
                 <Card className="w-60 flex-none border-2 border-foreground/10 shadow-sm h-full flex flex-col">

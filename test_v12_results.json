@@ -1,0 +1,92 @@
+[
+  {
+    "id": "Q1",
+    "question": "Qui s'est connecte hier ?",
+    "sql": "SELECT DBUSERNAME, EVENT_TIMESTAMP FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE TRUNC(EVENT_TIMESTAMP)=TRUNC(SYSDATE-1) ORDER BY EVENT_TIMESTAMP DESC FETCH FIRST 10 ROWS ONLY;",
+    "synthesis": "Aucune activite detectee pour cette demande. Essayez de reformuler votre question avec d'autres termes.",
+    "rows": 0,
+    "time": 24.6,
+    "error": null
+  },
+  {
+    "id": "Q2",
+    "question": "Combien d'utilisateurs dans la base ?",
+    "sql": "SELECT COUNT(*) AS NB_UTILISATEURS FROM DBA_USERS;",
+    "synthesis": "Il n'y a pas eu de recherche effectuée pour déterminer le nombre d'utilisateurs dans la base. Je vous suggère de reformuler votre demande en spécifian",
+    "rows": 0,
+    "time": 36.6,
+    "error": "ORA-00942: table or view does not exist\nHelp: https://docs.oracle.com/error-help/db/ora-00942/"
+  },
+  {
+    "id": "Q3",
+    "question": "Quels utilisateurs se sont connectes dans les 48 dernieres heures ?",
+    "sql": "SELECT DBUSERNAME, EVENT_TIMESTAMP FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE ACTION_NAME='SELECT' AND EVENT_TIMESTAMP>=SYSDATE-48/24 ORDER BY EVENT_TIMESTAMP DESC FETCH FIRST 10 ROWS ONLY;",
+    "synthesis": "Aucune activite detectee pour cette demande. Essayez de reformuler votre question avec d'autres termes.",
+    "rows": 0,
+    "time": 26.1,
+    "error": null
+  },
+  {
+    "id": "Q4",
+    "question": "Qu'est-ce qui s'est passe en janvier 2026 ?",
+    "sql": "SELECT DBUSERNAME, ACTION_NAME, OBJECT_NAME, EVENT_TIMESTAMP FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE TRUNC(EVENT_TIMESTAMP) >= TO_DATE('2026-01-01','YYYY-MM-DD') AND TR FETCH FIRST 10 ROWS ONLY;",
+    "synthesis": "En janvier 2026, aucune activité n'a été détectée. Il serait préférable de reformuler la question pour obtenir des informations pertinentes.",
+    "rows": 0,
+    "time": 31.4,
+    "error": "ORA-00920: invalid relational operator\nHelp: https://docs.oracle.com/error-help/db/ora-00920/"
+  },
+  {
+    "id": "Q5",
+    "question": "Quelle table a ete la plus modifiee ?",
+    "sql": "SELECT OBJECT_NAME, COUNT(*) AS NB FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE ACTION_NAME IN ('INSERT','UPDATE','DELETE') AND OBJECT_NAME IS NOT NULL GROUP BY OBJECT_NAME ORDER BY NB DESC FETCH FIRST 1 ROWS ONLY;",
+    "synthesis": "1 resultat trouve. Objet : AUD$.",
+    "rows": 1,
+    "time": 26.4,
+    "error": null
+  },
+  {
+    "id": "Q6",
+    "question": "Quelles actions VROMUALD a-t-il effectuees sur la table EMPLOYEES ?",
+    "sql": "SELECT ACTION_NAME, EVENT_TIMESTAMP FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE DBUSERNAME='VROMUALD' AND OBJECT_NAME='EMPLOYEES' ORDER BY EVENT_TIMESTAMP DESC FETCH FIRST 10 ROWS ONLY;",
+    "synthesis": "Aucune activite detectee pour cette demande. Essayez de reformuler votre question avec d'autres termes.",
+    "rows": 0,
+    "time": 26.5,
+    "error": null
+  },
+  {
+    "id": "Q7",
+    "question": "Quel poste de travail a effectue le plus de connexions ?",
+    "sql": "SELECT USERHOST, COUNT(*) AS NB FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE USERHOST IS NOT NULL GROUP BY USERHOST ORDER BY NB DESC FETCH FIRST 1 ROWS ONLY;",
+    "synthesis": "1 resultat trouve.",
+    "rows": 1,
+    "time": 25.0,
+    "error": null
+  },
+  {
+    "id": "Q8",
+    "question": "Y a-t-il eu des suppressions de comptes utilisateurs ?",
+    "sql": "SELECT DBUSERNAME, OBJECT_NAME, EVENT_TIMESTAMP FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE ACTION_NAME = 'DROP USER' ORDER BY EVENT_TIMESTAMP DESC FETCH FIRST 10 ROWS ONLY;",
+    "synthesis": "Il y a eu des suppressions de comptes utilisateurs SYSTEM sur le objet VROMUALD entre le 20 novembre 2025 et le 21 novembre 2025, avec au moins deux é",
+    "rows": 10,
+    "time": 48.3,
+    "error": null
+  },
+  {
+    "id": "Q9",
+    "question": "Qui a le plus change d'informations au cours des 30 derniers jours ?",
+    "sql": "SELECT DBUSERNAME, COUNT(*) AS NB FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE ACTION_NAME IN ('INSERT','UPDATE','DELETE') AND DBUSERNAME IS NOT NULL AND TRUNC(EVENT_TIMESTAMP)>=TRUNC(SYSDATE-30) GROUP BY DBUSERNAME;",
+    "synthesis": "Aucune activite detectee pour cette demande. Essayez de reformuler votre question avec d'autres termes.",
+    "rows": 0,
+    "time": 27.7,
+    "error": null
+  },
+  {
+    "id": "Q10",
+    "question": "Quels utilisateurs se sont connectes entre 22h et 6h du matin ?",
+    "sql": "SELECT DBUSERNAME, EVENT_TIMESTAMP FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE CONNECTED IN (22,6) ORDER BY EVENT_TIMESTAMP DESC FETCH FIRST 10 ROWS ONLY;",
+    "synthesis": "La recherche sur les utilisateurs ayant effectué des connexions entre 22h et 6h du matin n'a pas abouti. Il serait préférable de reformuler la questio",
+    "rows": 0,
+    "time": 33.3,
+    "error": "ORA-00904: \"CONNECTED\": invalid identifier\nHelp: https://docs.oracle.com/error-help/db/ora-00904/"
+  }
+]

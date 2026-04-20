@@ -15,6 +15,14 @@ interface AppDataContextType {
   history: HistoryEntry[]
   settings: RuntimeSettings | null
   isLoading: boolean
+  showUsersColumn: boolean
+  showTablesColumn: boolean
+  showActionsColumn: boolean
+  setShowUsersColumn: (show: boolean) => void
+  setShowTablesColumn: (show: boolean) => void
+  setShowActionsColumn: (show: boolean) => void
+  selectedHistoryEntry: HistoryEntry | null
+  setSelectedHistoryEntry: (entry: HistoryEntry | null) => void
   refreshMetadata: () => Promise<void>
   refreshHistory: () => Promise<void>
   refreshSettings: () => Promise<void>
@@ -48,6 +56,10 @@ export function AppShell({ children }: AppShellProps) {
   const [history, setHistory] = useState<HistoryEntry[]>([])
   const [settings, setSettings] = useState<RuntimeSettings | null>(null)
   const [dataLoading, setDataLoading] = useState(true)
+  const [showUsersColumn, setShowUsersColumn] = useState(true)
+  const [showTablesColumn, setShowTablesColumn] = useState(true)
+  const [showActionsColumn, setShowActionsColumn] = useState(true)
+  const [selectedHistoryEntry, setSelectedHistoryEntry] = useState<HistoryEntry | null>(null)
 
   const refreshMetadata = useCallback(async () => {
     try {
@@ -132,6 +144,14 @@ export function AppShell({ children }: AppShellProps) {
         history,
         settings,
         isLoading: dataLoading,
+        showUsersColumn,
+        showTablesColumn,
+        showActionsColumn,
+        setShowUsersColumn,
+        setShowTablesColumn,
+        setShowActionsColumn,
+        selectedHistoryEntry,
+        setSelectedHistoryEntry,
         refreshMetadata,
         refreshHistory,
         refreshSettings,
@@ -143,7 +163,17 @@ export function AppShell({ children }: AppShellProps) {
       }}
     >
       <SidebarProvider>
-        <AppSidebar oracleStatus={oracleStatus} />
+        <AppSidebar
+          oracleStatus={oracleStatus}
+          showUsersColumn={showUsersColumn}
+          showTablesColumn={showTablesColumn}
+          showActionsColumn={showActionsColumn}
+          setShowUsersColumn={setShowUsersColumn}
+          setShowTablesColumn={setShowTablesColumn}
+          setShowActionsColumn={setShowActionsColumn}
+          recentHistory={history.slice(-5).reverse()}
+          onSelectHistory={(entry) => setSelectedHistoryEntry(entry)}
+        />
         <SidebarInset className="bg-background">
           {children}
         </SidebarInset>

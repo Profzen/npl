@@ -1,6 +1,6 @@
 import time
 import hashlib
-from threading import Lock, Thread, Semaphore
+from threading import Lock, Thread
 from uuid import uuid4
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, status
@@ -46,17 +46,17 @@ app = FastAPI(title="SMART2D Backend API", version="0.1.0")
 
 QUERY_HISTORY: list[dict] = []
 MAX_CONCURRENT_QUERIES_PER_USER = max(1, settings.max_concurrent_queries_per_user)
-MAX_GLOBAL_CONCURRENT_QUERIES = 1  # Prevent CPU/RAM monopolization: only 1 heavy compute at a time
 _ACTIVE_USER_QUERIES: dict[str, int] = {}
 _ACTIVE_USER_QUERIES_LOCK = Lock()
 _QUERY_PROGRESS: dict[str, dict] = {}
 _QUERY_PROGRESS_LOCK = Lock()
-_GLOBAL_QUERY_SEMAPHORE = Semaphore(MAX_GLOBAL_CONCURRENT_QUERIES)
 
-# Query response cache (TTL: 3600s = 1 hour)
+# Query response cache (TTL: 3600s = 1 hour, max ~256MB)
+import sys
 _QUERY_CACHE: dict[str, tuple[QueryResponse, float]] = {}  # {hash: (response, timestamp)}
 _QUERY_CACHE_LOCK = Lock()
 _QUERY_CACHE_TTL_SECONDS = 3600
+_QUERY_CACHE_MAX_BYTES = 256 * 1024 * 1024  # 256 MB
 
 QUERY_STAGE_DEFS = [
     ("generate_sql", "Generation SQL", "Transformation de la question en requete Oracle"),
@@ -117,16 +117,29 @@ def _get_cached_response(question: str) -> QueryResponse | None:
     return None
 
 
+def _estimate_cache_size() -> int:
+    """Rough estimate of cache memory usage in bytes."""
+    total = 0
+    for key, (resp, _ts) in _QUERY_CACHE.items():
+        total += sys.getsizeof(key)
+        total += sys.getsizeof(resp.question) + sys.getsizeof(resp.sql) + sys.getsizeof(resp.synthesis)
+        for row in resp.rows:
+            total += sum(sys.getsizeof(str(v)) for v in row.values())
+    return total
+
+
 def _cache_response(question: str, response: QueryResponse) -> None:
-    """Store response in cache with timestamp."""
+    """Store response in cache with timestamp. Evict oldest 50% if size exceeds 256MB."""
     key = _get_query_cache_key(question)
     with _QUERY_CACHE_LOCK:
         _QUERY_CACHE[key] = (response, time.time())
-        # Keep cache size reasonable (max 100 entries)
-        if len(_QUERY_CACHE) > 100:
-            # Remove oldest entry
-            oldest_key = min(_QUERY_CACHE.keys(), key=lambda k: _QUERY_CACHE[k][1])
-            del _QUERY_CACHE[oldest_key]
+        # Evict oldest 50% if cache exceeds max size
+        if _estimate_cache_size() > _QUERY_CACHE_MAX_BYTES:
+            sorted_keys = sorted(_QUERY_CACHE.keys(), key=lambda k: _QUERY_CACHE[k][1])
+            to_remove = len(sorted_keys) // 2
+            for k in sorted_keys[:to_remove]:
+                del _QUERY_CACHE[k]
+            print(f"[CACHE_EVICT] Removed {to_remove} oldest entries to free memory")
 
 
 def _to_auth_user(user: dict) -> AuthUser:
@@ -300,148 +313,140 @@ def _execute_sql_with_progress(sql: str, request_id: str) -> tuple[list[dict], s
 
 
 def _execute_query_pipeline(req: QueryRequest, username: str, request_id: str | None = None) -> QueryResponse:
-    """Execute query pipeline with global semaphore to prevent CPU/RAM monopolization.
-    Only 1 heavy compute (SQL generation + Phi-3 synthesis) allowed at a time.
-    Others block and wait their turn.
-    """
-    # Acquire global slot (blocks if another query is running)
-    _GLOBAL_QUERY_SEMAPHORE.acquire()
-    try:
-        t0 = time.perf_counter()
+    """Execute query pipeline with full resource allocation for optimal model performance."""
+    t0 = time.perf_counter()
 
-        if request_id is not None:
-            _update_query_progress(
-                request_id,
-                stage_key="generate_sql",
-                stage_status="running",
-                current_summary="Generation de la requete SQL en cours",
-            )
-
-        t_sql_start = time.perf_counter()
-        sql = generate_sql_from_question(req.question)
-        t_sql_end = time.perf_counter()
-
-        if request_id is not None:
-            _update_query_progress(
-                request_id,
-                stage_key="generate_sql",
-                stage_status="completed",
-                duration_seconds=t_sql_end - t_sql_start,
-                current_summary="Requete SQL generee",
-            )
-
-        if request_id is not None:
-            rows, error = _execute_sql_with_progress(sql, request_id)
-        else:
-            rows, error = execute_sql(sql)
-
-        blocked = False
-
-        if request_id is not None:
-            _update_query_progress(
-                request_id,
-                stage_key="build_synthesis",
-                stage_status="running",
-                current_summary="Traduction de la reponse brute en langage clair",
-            )
-
-        t_syn_start = time.perf_counter()
-        synthesis = build_synthesis(req.question, rows, error)
-        t_syn_end = time.perf_counter()
-
-        if request_id is not None:
-            _update_query_progress(
-                request_id,
-                stage_key="build_synthesis",
-                stage_status="completed",
-                duration_seconds=t_syn_end - t_syn_start,
-                current_summary="Synthese terminee",
-            )
-            _update_query_progress(
-                request_id,
-                stage_key="finalize",
-                stage_status="running",
-                current_summary="Preparation de la reponse finale",
-            )
-
-        t_post_start = time.perf_counter()
-        fetch_limit = get_fetch_limit()
-
-        entry = {
-            "timestamp": int(time.time()),
-            "username": username,
-            "question": req.question,
-            "sql": sql,
-            "synthesis": synthesis,
-            "row_count": len(rows),
-            "blocked": blocked,
-            "error": error,
-        }
-        QUERY_HISTORY.append(entry)
-        if len(QUERY_HISTORY) > 200:
-            del QUERY_HISTORY[:-200]
-
-        status_value = "ok"
-        detail_value = "Execution terminee"
-        if error:
-            status_value = "error"
-            detail_value = error
-
-        write_audit_log(
-            username=username,
-            action="query_execute",
-            result_status=status_value,
-            question=req.question,
-            sql_text=sql,
-            row_count=len(rows),
-            details=detail_value,
+    if request_id is not None:
+        _update_query_progress(
+            request_id,
+            stage_key="generate_sql",
+            stage_status="running",
+            current_summary="Generation de la requete SQL en cours",
         )
 
-        response = QueryResponse(
-            question=req.question,
-            sql=sql,
-            synthesis=synthesis,
-            rows=rows[:fetch_limit],
-            row_count=len(rows),
-            blocked=blocked,
-            error=error,
+    t_sql_start = time.perf_counter()
+    sql = generate_sql_from_question(req.question)
+    t_sql_end = time.perf_counter()
+
+    if request_id is not None:
+        _update_query_progress(
+            request_id,
+            stage_key="generate_sql",
+            stage_status="completed",
+            duration_seconds=t_sql_end - t_sql_start,
+            current_summary="Requete SQL generee",
         )
 
-        t_post_end = time.perf_counter()
-        t_total = t_post_end - t0
-        print(
-            "[QUERY_TIMING] "
-            f"user={username} "
-            f"question_len={len(req.question)} "
-            f"total={t_total:.3f}s "
-            f"generate_sql={t_sql_end - t_sql_start:.3f}s "
-            f"execute_oracle={t_syn_start - t_sql_end:.3f}s "
-            f"build_synthesis={t_syn_end - t_syn_start:.3f}s "
-            f"history_audit={t_post_end - t_post_start:.3f}s "
-            f"rows={len(rows)} "
-            f"error={'yes' if error else 'no'}"
+    if request_id is not None:
+        rows, error = _execute_sql_with_progress(sql, request_id)
+    else:
+        rows, error = execute_sql(sql)
+
+    blocked = False
+
+    if request_id is not None:
+        _update_query_progress(
+            request_id,
+            stage_key="build_synthesis",
+            stage_status="running",
+            current_summary="Traduction de la reponse brute en langage clair",
         )
 
-        if request_id is not None:
-            _update_query_progress(
-                request_id,
-                stage_key="finalize",
-                stage_status="completed",
-                duration_seconds=t_post_end - t_post_start,
-                current_summary="Analyse terminee",
-                status="completed",
-                result=response,
-            )
+    t_syn_start = time.perf_counter()
+    synthesis = build_synthesis(req.question, rows, error)
+    t_syn_end = time.perf_counter()
 
-        return response
-    finally:
-        # Always release global semaphore so next queued query can proceed
-        _GLOBAL_QUERY_SEMAPHORE.release()
+    if request_id is not None:
+        _update_query_progress(
+            request_id,
+            stage_key="build_synthesis",
+            stage_status="completed",
+            duration_seconds=t_syn_end - t_syn_start,
+            current_summary="Synthese terminee",
+        )
+        _update_query_progress(
+            request_id,
+            stage_key="finalize",
+            stage_status="running",
+            current_summary="Preparation de la reponse finale",
+        )
+
+    t_post_start = time.perf_counter()
+    fetch_limit = get_fetch_limit()
+
+    entry = {
+        "timestamp": int(time.time()),
+        "username": username,
+        "question": req.question,
+        "sql": sql,
+        "synthesis": synthesis,
+        "row_count": len(rows),
+        "blocked": blocked,
+        "error": error,
+    }
+    QUERY_HISTORY.append(entry)
+    if len(QUERY_HISTORY) > 200:
+        del QUERY_HISTORY[:-200]
+
+    status_value = "ok"
+    detail_value = "Execution terminee"
+    if error:
+        status_value = "error"
+        detail_value = error
+
+    write_audit_log(
+        username=username,
+        action="query_execute",
+        result_status=status_value,
+        question=req.question,
+        sql_text=sql,
+        row_count=len(rows),
+        details=detail_value,
+    )
+
+    response = QueryResponse(
+        question=req.question,
+        sql=sql,
+        synthesis=synthesis,
+        rows=rows[:fetch_limit],
+        row_count=len(rows),
+        blocked=blocked,
+        error=error,
+    )
+
+    t_post_end = time.perf_counter()
+    t_total = t_post_end - t0
+    print(
+        "[QUERY_TIMING] "
+        f"user={username} "
+        f"question_len={len(req.question)} "
+        f"total={t_total:.3f}s "
+        f"generate_sql={t_sql_end - t_sql_start:.3f}s "
+        f"execute_oracle={t_syn_start - t_sql_end:.3f}s "
+        f"build_synthesis={t_syn_end - t_syn_start:.3f}s "
+        f"history_audit={t_post_end - t_post_start:.3f}s "
+        f"rows={len(rows)} "
+        f"error={'yes' if error else 'no'}"
+    )
+
+    if request_id is not None:
+        _update_query_progress(
+            request_id,
+            stage_key="finalize",
+            stage_status="completed",
+            duration_seconds=t_post_end - t_post_start,
+            current_summary="Analyse terminee",
+            status="completed",
+            result=response,
+        )
+
+    return response
 
 
 def _run_tracked_query(request_id: str, req: QueryRequest, username: str) -> None:
     try:
         result = _execute_query_pipeline(req, username, request_id=request_id)
+        _cache_response(req.question, result)
         _update_query_progress(request_id, status="completed", result=result)
     except Exception as exc:
         _update_query_progress(
@@ -666,6 +671,16 @@ def query(req: QueryRequest, current_user: dict = Depends(get_current_user)) -> 
 @app.post("/api/query/start", response_model=QueryStartResponse)
 def query_start(req: QueryRequest, current_user: dict = Depends(get_current_user)) -> QueryStartResponse:
     username = str(current_user["username"])
+
+    # Check cache first — return instantly if we already have this answer
+    cached_response = _get_cached_response(req.question)
+    if cached_response is not None:
+        request_id = uuid4().hex
+        _init_query_progress(request_id, username, req.question)
+        _update_query_progress(request_id, status="completed", result=cached_response,
+                               current_summary="Reponse depuis le cache")
+        return QueryStartResponse(request_id=request_id)
+
     if not _acquire_user_query_slot(username):
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,

@@ -209,10 +209,37 @@ def _rule_synthesis(rows: list[dict]) -> str:
 
 
 def build_synthesis(question: str, rows: list[dict], error: str | None) -> str:
-    if error:
-        return f"La requete n'a pas pu etre executee: {error}"
+    if error and not rows:
+        # SQL execution failed — try Phi-3 to formulate a helpful response
+        status, err = phi3_status()
+        if status == "loaded":
+            error_prompt = (
+                f"<|system|>{SYSTEM_PROMPT_FR}\n"
+                "Si la recherche n'a pas abouti, explique poliment que la demande n'a pas donne de resultat "
+                "et suggere de reformuler la question autrement. Ne mentionne jamais SQL, requete, table ou erreur technique.<|end|>"
+                f"<|user|>Question : {question}\n"
+                f"Resultat : La recherche n'a pas abouti pour cette demande.<|end|>"
+                "<|assistant|>"
+            )
+            try:
+                resp = _PHI3_MODEL(
+                    error_prompt,
+                    max_tokens=settings.phi3_max_tokens,
+                    temperature=0.3,
+                    repeat_penalty=1.05,
+                    stop=["<|end|>", "<|user|>", "Instruction 2", "Instruction:"],
+                )
+                text = resp.get("choices", [{}])[0].get("text", "")
+                cleaned = _cleanup_phi3_text(text)
+                if cleaned and len(cleaned) > 15:
+                    return cleaned
+            except Exception:
+                pass
+        # Fallback if Phi-3 unavailable or failed
+        return "La recherche n'a pas abouti pour cette demande. Essayez de reformuler votre question avec d'autres termes."
+
     if not rows:
-        return "Aucune activite detectee pour cette demande."
+        return "Aucune activite detectee pour cette demande. Essayez de reformuler votre question avec d'autres termes."
 
     # V12 optimization: Try fast rule-based synthesis first for simple cases
     if settings.use_rule_synthesis_fallback and len(rows) <= 1:
@@ -234,7 +261,6 @@ def build_synthesis(question: str, rows: list[dict], error: str | None) -> str:
     )
 
     try:
-        # V12 optimization: reduced max_tokens (150 vs 300)
         resp = _PHI3_MODEL(
             prompt,
             max_tokens=settings.phi3_max_tokens,
@@ -247,6 +273,10 @@ def build_synthesis(question: str, rows: list[dict], error: str | None) -> str:
         if cleaned:
             return cleaned
     except Exception as exc:
-        return f"Synthese indisponible: erreur Phi3 ({exc})."
+        print(f"[PHI3_ERROR] {exc}")
 
-    return "Synthese indisponible: reponse vide du modele Phi3."
+    # Fallback to rule-based synthesis instead of showing an error
+    fallback = _rule_synthesis(rows)
+    if fallback:
+        return fallback
+    return "Aucune activite detectee pour cette demande."

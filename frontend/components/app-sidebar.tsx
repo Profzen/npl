@@ -11,6 +11,9 @@ import {
   Menu,
   Database,
   Shield,
+  Eye,
+  EyeOff,
+  MessageSquare,
 } from 'lucide-react'
 import {
   Sidebar,
@@ -28,7 +31,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { useAuth } from '@/lib/auth-context'
-import type { OracleStatus } from '@/lib/types'
+import type { OracleStatus, HistoryEntry } from '@/lib/types'
 import { cn } from '@/lib/utils'
 
 const navItems = [
@@ -43,6 +46,14 @@ const adminItems = [
 
 interface AppSidebarProps {
   oracleStatus: OracleStatus
+  showUsersColumn: boolean
+  showTablesColumn: boolean
+  showActionsColumn: boolean
+  setShowUsersColumn: (show: boolean) => void
+  setShowTablesColumn: (show: boolean) => void
+  setShowActionsColumn: (show: boolean) => void
+  recentHistory?: HistoryEntry[]
+  onSelectHistory?: (entry: HistoryEntry) => void
 }
 
 function OracleStatusBadge({ status }: { status: OracleStatus }) {
@@ -88,7 +99,17 @@ function OracleStatusBadge({ status }: { status: OracleStatus }) {
   )
 }
 
-export function AppSidebar({ oracleStatus }: AppSidebarProps) {
+export function AppSidebar({
+  oracleStatus,
+  showUsersColumn,
+  showTablesColumn,
+  showActionsColumn,
+  setShowUsersColumn,
+  setShowTablesColumn,
+  setShowActionsColumn,
+  recentHistory = [],
+  onSelectHistory,
+}: AppSidebarProps) {
   const pathname = usePathname()
   const { user, logout } = useAuth()
   const { state } = useSidebar()
@@ -117,8 +138,8 @@ export function AppSidebar({ oracleStatus }: AppSidebarProps) {
         </div>
       </SidebarHeader>
 
-      <SidebarContent className="py-2">
-        <SidebarGroup>
+      <SidebarContent className="py-2 overflow-x-hidden">
+        <SidebarGroup className="pt-0 pb-2">
           <SidebarGroupContent>
             <SidebarMenu>
               {navItems.map((item) => (
@@ -154,6 +175,72 @@ export function AppSidebar({ oracleStatus }: AppSidebarProps) {
           </SidebarGroupContent>
         </SidebarGroup>
 
+        {!isCollapsed && (
+          <>
+            <Separator className="mx-3 my-1 w-auto" />
+            <div className="px-3 pb-1">
+              <p className="px-1 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                Colonnes
+              </p>
+              <div className="mt-1 space-y-1">
+                <button
+                  onClick={() => setShowUsersColumn(!showUsersColumn)}
+                  className={cn(
+                    'flex w-full items-center justify-between rounded-md px-2 py-1.5 text-xs transition-colors hover:bg-sidebar-accent/50',
+                    showUsersColumn ? 'text-foreground' : 'text-muted-foreground'
+                  )}
+                >
+                  <span>Utilisateurs</span>
+                  {showUsersColumn ? <EyeOff className="h-3.5 w-3.5 text-muted-foreground" /> : <Eye className="h-3.5 w-3.5" />}
+                </button>
+                <button
+                  onClick={() => setShowTablesColumn(!showTablesColumn)}
+                  className={cn(
+                    'flex w-full items-center justify-between rounded-md px-2 py-1.5 text-xs transition-colors hover:bg-sidebar-accent/50',
+                    showTablesColumn ? 'text-foreground' : 'text-muted-foreground'
+                  )}
+                >
+                  <span>Tables</span>
+                  {showTablesColumn ? <EyeOff className="h-3.5 w-3.5 text-muted-foreground" /> : <Eye className="h-3.5 w-3.5" />}
+                </button>
+                <button
+                  onClick={() => setShowActionsColumn(!showActionsColumn)}
+                  className={cn(
+                    'flex w-full items-center justify-between rounded-md px-2 py-1.5 text-xs transition-colors hover:bg-sidebar-accent/50',
+                    showActionsColumn ? 'text-foreground' : 'text-muted-foreground'
+                  )}
+                >
+                  <span>Actions</span>
+                  {showActionsColumn ? <EyeOff className="h-3.5 w-3.5 text-muted-foreground" /> : <Eye className="h-3.5 w-3.5" />}
+                </button>
+              </div>
+            </div>
+
+            {recentHistory.length > 0 && (
+              <>
+                <Separator className="mx-3 my-1 w-auto" />
+                <div className="flex-1 min-h-0 px-3 pb-1 flex flex-col">
+                  <p className="px-1 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                    Dernières questions
+                  </p>
+                  <div className="mt-1 space-y-1 flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
+                    {recentHistory.map((entry, i) => (
+                      <button
+                        key={entry.id || i}
+                        type="button"
+                        onClick={() => onSelectHistory?.(entry)}
+                        className="flex w-full items-start gap-1.5 rounded-md px-2 py-1.5 text-[11px] leading-4 text-muted-foreground bg-sidebar-accent/20 hover:bg-sidebar-accent/40 transition-colors text-left cursor-pointer"
+                      >
+                        <MessageSquare className="h-3 w-3 mt-0.5 shrink-0 text-primary/60" />
+                        <span className="line-clamp-2">{entry.question}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
+          </>
+        )}
       </SidebarContent>
 
       <SidebarFooter className="border-t border-sidebar-border p-2 space-y-1.5">
