@@ -40,7 +40,7 @@ class Settings:
             os.getenv("PHI3_PATH", "phi3-mini-gguf/Phi-3-mini-4k-instruct-q4.gguf")
         )
     )
-    max_sql_tokens: int = int(os.getenv("MAX_SQL_TOKENS", "80"))
+    max_sql_tokens: int = int(os.getenv("MAX_SQL_TOKENS", "160"))
     default_fetch_limit: int = int(os.getenv("DEFAULT_FETCH_LIMIT", "10"))
     dashboard_row_cap: int = int(os.getenv("DASHBOARD_ROW_CAP", "5000"))
     oracle_pool_min: int = int(os.getenv("ORACLE_POOL_MIN", "1"))

@@ -9,6 +9,7 @@ import { useOracleStatus } from '@/hooks/use-oracle-status'
 import { Spinner } from '@/components/ui/spinner'
 import type { Metadata, HistoryEntry, RuntimeSettings } from '@/lib/types'
 import { getMetadata, getHistory, getSettings } from '@/lib/api'
+import { translate } from '@/lib/i18n'
 
 interface AppDataContextType {
   metadata: Metadata | null
@@ -84,6 +85,13 @@ export function AppShell({ children }: AppShellProps) {
     try {
       const data = await getSettings()
       setSettings(data)
+      try {
+        if (typeof window !== 'undefined' && (data.interface_lang === 'fr' || data.interface_lang === 'en')) {
+          window.localStorage.setItem('asksmart_lang', data.interface_lang)
+        }
+      } catch {
+        /* ignore */
+      }
     } catch (error) {
       console.error('[v0] Failed to fetch settings:', error)
     }
@@ -119,7 +127,7 @@ export function AppShell({ children }: AppShellProps) {
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-4">
           <Spinner className="w-8 h-8 text-primary" />
-          <p className="text-sm text-muted-foreground">Chargement...</p>
+          <p className="text-sm text-muted-foreground">{translate((settings?.interface_lang as 'fr' | 'en') || 'fr', 'app.loading')}</p>
         </div>
       </div>
     )
@@ -131,7 +139,7 @@ export function AppShell({ children }: AppShellProps) {
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-4">
           <Spinner className="w-8 h-8 text-primary" />
-          <p className="text-sm text-muted-foreground">Chargement des données...</p>
+          <p className="text-sm text-muted-foreground">{translate((settings?.interface_lang as 'fr' | 'en') || 'fr', 'app.loading')}</p>
         </div>
       </div>
     )

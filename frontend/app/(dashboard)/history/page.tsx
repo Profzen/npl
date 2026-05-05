@@ -7,18 +7,19 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Badge } from '@/components/ui/badge'
 import { useAppData } from '@/components/app-shell'
+import { useT } from '@/lib/i18n'
 import type { HistoryEntry } from '@/lib/types'
 import { cn } from '@/lib/utils'
 
-function StatusBadge({ status }: { status: HistoryEntry['status'] }) {
+function StatusBadge({ status, t }: { status: HistoryEntry['status']; t: (k: string) => string }) {
   const config = {
     ok: {
-      label: 'OK',
+      label: t('status.ok'),
       icon: CheckCircle2,
       className: 'bg-status-success/10 text-status-success border-status-success/20',
     },
     error: {
-      label: 'Erreur',
+      label: t('status.error'),
       icon: XCircle,
       className: 'bg-status-error/10 text-status-error border-status-error/20',
     },
@@ -47,6 +48,7 @@ function formatDate(dateString: string) {
 }
 
 export default function HistoryPage() {
+  const t = useT()
   const { history, refreshHistory } = useAppData()
   const [selectedEntry, setSelectedEntry] = useState<HistoryEntry | null>(null)
   const [isRefreshing, setIsRefreshing] = useState(false)
@@ -63,14 +65,14 @@ export default function HistoryPage() {
       <header className="shrink-0 border-b border-border bg-card/50 backdrop-blur-sm">
         <div className="px-6 py-4 flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">Historique</h1>
+            <h1 className="text-2xl font-bold tracking-tight">{t('history.title')}</h1>
             <p className="text-sm text-muted-foreground mt-1">
-              Consultez vos requêtes précédentes
+              {t('history.subtitle')}
             </p>
           </div>
           <Button variant="outline" size="sm" onClick={handleRefresh} disabled={isRefreshing}>
             <RefreshCw className={cn('w-4 h-4 mr-2', isRefreshing && 'animate-spin')} />
-            Actualiser
+            {t('history.refresh')}
           </Button>
         </div>
       </header>
@@ -83,10 +85,10 @@ export default function HistoryPage() {
             <CardHeader className="shrink-0 pb-3">
               <CardTitle className="text-base flex items-center gap-2">
                 <History className="w-4 h-4 text-primary" />
-                Requêtes récentes
+                {t('history.recent_queries')}
               </CardTitle>
               <CardDescription className="text-xs">
-                {history.length} requête{history.length > 1 ? 's' : ''} dans l&apos;historique
+                {history.length} {history.length > 1 ? t('history.count') : t('history.count_one')}
               </CardDescription>
             </CardHeader>
             <CardContent className="flex-1 overflow-hidden p-0">
@@ -104,7 +106,7 @@ export default function HistoryPage() {
                       >
                         <div className="flex items-start justify-between gap-2 mb-2">
                           <p className="text-sm font-medium line-clamp-2">{entry.question}</p>
-                          <StatusBadge status={entry.status} />
+                          <StatusBadge status={entry.status} t={t} />
                         </div>
                         <p className="text-xs text-muted-foreground">
                           {formatDate(entry.created_at)}
@@ -117,7 +119,7 @@ export default function HistoryPage() {
                     <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center mb-4">
                       <History className="w-6 h-6 text-muted-foreground" />
                     </div>
-                    <p className="text-sm text-muted-foreground">Aucune requête dans l&apos;historique</p>
+                    <p className="text-sm text-muted-foreground">{t('history.empty')}</p>
                   </div>
                 )}
               </ScrollArea>
@@ -127,7 +129,7 @@ export default function HistoryPage() {
           {/* Right Panel - Entry Detail */}
           <Card className="flex flex-col overflow-hidden">
             <CardHeader className="shrink-0 pb-3">
-              <CardTitle className="text-base">Détail</CardTitle>
+              <CardTitle className="text-base">{t('history.detail')}</CardTitle>
             </CardHeader>
             <CardContent className="flex-1 overflow-hidden p-0">
               {selectedEntry ? (
@@ -135,7 +137,7 @@ export default function HistoryPage() {
                   <div className="space-y-4 pr-4">
                     {/* Status and Date */}
                     <div className="flex items-center justify-between">
-                      <StatusBadge status={selectedEntry.status} />
+                      <StatusBadge status={selectedEntry.status} t={t} />
                       <span className="text-xs text-muted-foreground">
                         {formatDate(selectedEntry.created_at)}
                       </span>
@@ -145,7 +147,7 @@ export default function HistoryPage() {
                     <div>
                       <div className="flex items-center gap-2 mb-2">
                         <MessageSquare className="w-4 h-4 text-primary" />
-                        <span className="text-sm font-medium">Question</span>
+                        <span className="text-sm font-medium">{t('history.question')}</span>
                       </div>
                       <p className="text-sm bg-muted/50 p-3 rounded-lg whitespace-pre-wrap break-words leading-relaxed">
                         {selectedEntry.question}
@@ -156,7 +158,7 @@ export default function HistoryPage() {
                     <div>
                       <div className="flex items-center gap-2 mb-2">
                         <Code className="w-4 h-4 text-primary" />
-                        <span className="text-sm font-medium">SQL généré</span>
+                        <span className="text-sm font-medium">{t('history.sql')}</span>
                       </div>
                       <pre className="text-xs font-mono bg-muted/50 p-3 rounded-lg whitespace-pre-wrap break-all leading-relaxed">
                         {selectedEntry.sql}
@@ -167,7 +169,7 @@ export default function HistoryPage() {
                     <div>
                       <div className="flex items-center gap-2 mb-2">
                         <Zap className="w-4 h-4 text-primary" />
-                        <span className="text-sm font-medium">Synthèse</span>
+                        <span className="text-sm font-medium">{t('history.synthesis')}</span>
                       </div>
                       <p className="text-sm bg-muted/50 p-3 rounded-lg leading-relaxed whitespace-pre-wrap break-words">
                         {selectedEntry.synthesis}
@@ -187,10 +189,10 @@ export default function HistoryPage() {
                         <div className="flex items-center justify-between mb-2">
                           <div className="flex items-center gap-2">
                             <Table className="w-4 h-4 text-primary" />
-                            <span className="text-sm font-medium">Résultats</span>
+                            <span className="text-sm font-medium">{t('history.results')}</span>
                           </div>
                           <Badge variant="secondary" className="text-xs font-mono">
-                            {selectedEntry.row_count} ligne{selectedEntry.row_count > 1 ? 's' : ''}
+                            {selectedEntry.row_count} {selectedEntry.row_count > 1 ? t('history.row_many') : t('history.row_one')}
                           </Badge>
                         </div>
                         <div className="bg-muted/50 rounded-lg overflow-hidden">
@@ -223,7 +225,7 @@ export default function HistoryPage() {
                           </div>
                           {selectedEntry.rows.length > 10 && (
                             <p className="text-xs text-muted-foreground text-center py-2 border-t border-border">
-                              ... et {selectedEntry.rows.length - 10} autres lignes
+                              ... {t('dashboard.more')} {selectedEntry.rows.length - 10} {t('history.more_rows')}
                             </p>
                           )}
                         </div>
@@ -237,7 +239,7 @@ export default function HistoryPage() {
                     <History className="w-6 h-6 text-muted-foreground" />
                   </div>
                   <p className="text-sm text-muted-foreground">
-                    Sélectionnez une entrée pour voir les détails
+                    {t('history.select_entry')}
                   </p>
                 </div>
               )}

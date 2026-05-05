@@ -9,12 +9,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useAppData } from '@/components/app-shell'
 import { updateSettings, ApiError } from '@/lib/api'
+import { useT } from '@/lib/i18n'
 import type { RuntimeSettings } from '@/lib/types'
 import { cn } from '@/lib/utils'
 
 type NotificationType = 'success' | 'error' | null
 
 export default function SettingsPage() {
+  const t = useT()
   const { settings, refreshSettings, refreshAll } = useAppData()
   const [formData, setFormData] = useState<RuntimeSettings | null>(null)
   const [showPassword, setShowPassword] = useState(false)
@@ -49,12 +51,12 @@ export default function SettingsPage() {
     try {
       await updateSettings(formData)
       await refreshAll()
-      setNotification({ type: 'success', message: 'Paramètres enregistrés avec succès' })
+      setNotification({ type: 'success', message: t('settings.saved_success') })
     } catch (err) {
       if (err instanceof ApiError) {
         setNotification({ type: 'error', message: err.detail })
       } else {
-        setNotification({ type: 'error', message: 'Erreur lors de l\'enregistrement des paramètres' })
+        setNotification({ type: 'error', message: t('settings.saved_error') })
       }
     } finally {
       setIsSaving(false)
@@ -74,9 +76,9 @@ export default function SettingsPage() {
       {/* Header */}
       <header className="shrink-0 border-b border-border bg-card/50 backdrop-blur-sm">
         <div className="px-6 py-4">
-          <h1 className="text-2xl font-bold tracking-tight">Paramètres</h1>
+          <h1 className="text-2xl font-bold tracking-tight">{t('settings.title')}</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Configurez les paramètres de l&apos;application
+            {t('settings.subtitle')}
           </p>
         </div>
       </header>
@@ -108,17 +110,17 @@ export default function SettingsPage() {
             <CardHeader>
               <CardTitle className="text-lg flex items-center gap-2">
                 <Database className="w-5 h-5 text-primary" />
-                Connexion Oracle
+                {t('settings.oracle_connection')}
               </CardTitle>
               <CardDescription>
-                Paramètres de connexion à la base de données Oracle
+                {t('settings.oracle_connection_desc')}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* Oracle User */}
                 <div className="space-y-2">
-                  <Label htmlFor="oracle_user">Utilisateur Oracle</Label>
+                  <Label htmlFor="oracle_user">{t('settings.oracle_user')}</Label>
                   <Input
                     id="oracle_user"
                     value={formData.oracle_user}
@@ -129,7 +131,7 @@ export default function SettingsPage() {
 
                 {/* Oracle Password */}
                 <div className="space-y-2">
-                  <Label htmlFor="oracle_password">Mot de passe Oracle</Label>
+                  <Label htmlFor="oracle_password">{t('settings.oracle_password')}</Label>
                   <div className="relative">
                     <Input
                       id="oracle_password"
@@ -152,7 +154,7 @@ export default function SettingsPage() {
 
                 {/* Oracle Host */}
                 <div className="space-y-2">
-                  <Label htmlFor="oracle_host">Hôte</Label>
+                  <Label htmlFor="oracle_host">{t('settings.oracle_host')}</Label>
                   <Input
                     id="oracle_host"
                     value={formData.oracle_host}
@@ -163,7 +165,7 @@ export default function SettingsPage() {
 
                 {/* Oracle Port */}
                 <div className="space-y-2">
-                  <Label htmlFor="oracle_port">Port Oracle</Label>
+                  <Label htmlFor="oracle_port">{t('settings.oracle_port')}</Label>
                   <Input
                     id="oracle_port"
                     type="number"
@@ -177,7 +179,7 @@ export default function SettingsPage() {
 
                 {/* Oracle Service */}
                 <div className="space-y-2">
-                  <Label htmlFor="oracle_service">Service Oracle</Label>
+                  <Label htmlFor="oracle_service">{t('settings.oracle_service')}</Label>
                   <Input
                     id="oracle_service"
                     value={formData.oracle_service}
@@ -188,7 +190,7 @@ export default function SettingsPage() {
 
                 {/* Oracle Table */}
                 <div className="space-y-2">
-                  <Label htmlFor="oracle_table">Table Oracle interrogée</Label>
+                  <Label htmlFor="oracle_table">{t('settings.oracle_table')}</Label>
                   <Input
                     id="oracle_table"
                     value={formData.oracle_table}
@@ -206,15 +208,15 @@ export default function SettingsPage() {
             <CardHeader>
               <CardTitle className="text-lg flex items-center gap-2">
                 <Gauge className="w-5 h-5 text-primary" />
-                Analyse
+                {t('settings.analysis')}
               </CardTitle>
               <CardDescription>
-                Paramètres d&apos;analyse des requêtes
+                {t('settings.analysis_desc')}
               </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-2 max-w-sm">
-                <Label htmlFor="max_results">Résultats max par requête</Label>
+                <Label htmlFor="max_results">{t('settings.max_results')}</Label>
                 <Input
                   id="max_results"
                   type="number"
@@ -225,7 +227,7 @@ export default function SettingsPage() {
                   max={10000}
                 />
                 <p className="text-xs text-muted-foreground">
-                  Nombre maximum de lignes retournées par requête
+                  {t('settings.max_results_help')}
                 </p>
               </div>
             </CardContent>
@@ -236,17 +238,17 @@ export default function SettingsPage() {
             <CardHeader>
               <CardTitle className="text-lg flex items-center gap-2">
                 <Clock className="w-5 h-5 text-primary" />
-                Session et journalisation
+                {t('settings.session_logging')}
               </CardTitle>
               <CardDescription>
-                Paramètres de session et de conservation des logs
+                {t('settings.session_logging_desc')}
               </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* Session Duration */}
                 <div className="space-y-2">
-                  <Label htmlFor="session_duration">Durée de session (minutes)</Label>
+                  <Label htmlFor="session_duration">{t('settings.session_duration')}</Label>
                   <Input
                     id="session_duration"
                     type="number"
@@ -257,13 +259,13 @@ export default function SettingsPage() {
                     max={1440}
                   />
                   <p className="text-xs text-muted-foreground">
-                    Durée d&apos;inactivité avant déconnexion automatique
+                    {t('settings.session_duration_help')}
                   </p>
                 </div>
 
                 {/* Logs Retention */}
                 <div className="space-y-2">
-                  <Label htmlFor="logs_retention">Conservation des logs (jours)</Label>
+                  <Label htmlFor="logs_retention">{t('settings.logs_retention')}</Label>
                   <Input
                     id="logs_retention"
                     type="number"
@@ -274,7 +276,7 @@ export default function SettingsPage() {
                     max={365}
                   />
                   <p className="text-xs text-muted-foreground">
-                    Durée de conservation des logs d&apos;activité
+                    {t('settings.logs_retention_help')}
                   </p>
                 </div>
               </div>
@@ -286,15 +288,15 @@ export default function SettingsPage() {
             <CardHeader>
               <CardTitle className="text-lg flex items-center gap-2">
                 <Globe className="w-5 h-5 text-primary" />
-                Interface
+                {t('settings.interface')}
               </CardTitle>
               <CardDescription>
-                Paramètres d&apos;affichage de l&apos;interface
+                {t('settings.interface_desc')}
               </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-2 max-w-sm">
-                <Label htmlFor="interface_lang">Langue de l&apos;interface</Label>
+                <Label htmlFor="interface_lang">{t('settings.language')}</Label>
                 <Select
                   value={formData.interface_lang}
                   onValueChange={(value) => handleInputChange('interface_lang', value as 'fr' | 'en')}
@@ -315,18 +317,18 @@ export default function SettingsPage() {
           <div className="flex items-center justify-end gap-3 pt-4">
             <Button variant="outline" onClick={handleReset} disabled={isSaving}>
               <RotateCcw className="w-4 h-4 mr-2" />
-              Réinitialiser
+              {t('settings.reset')}
             </Button>
             <Button onClick={handleSave} disabled={isSaving}>
               {isSaving ? (
                 <>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Enregistrement...
+                  {t('settings.saving')}
                 </>
               ) : (
                 <>
                   <Save className="w-4 h-4 mr-2" />
-                  Sauvegarder
+                  {t('settings.save')}
                 </>
               )}
             </Button>

@@ -1,14 +1,16 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { Eye, EyeOff, Shield, Loader2 } from 'lucide-react'
+import Image from 'next/image'
+import { Eye, EyeOff, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useAuth } from '@/lib/auth-context'
 import { ApiError } from '@/lib/api'
+import { tStandalone, getStandaloneLang } from '@/lib/i18n'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -18,6 +20,10 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Re-render after mount so SSR fallback (fr) is replaced by client-resolved lang
+  const [, setLang] = useState<'fr' | 'en'>('fr')
+  useEffect(() => { setLang(getStandaloneLang()) }, [])
+  const t = tStandalone
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -31,7 +37,7 @@ export default function LoginPage() {
       if (err instanceof ApiError) {
         setError(err.detail)
       } else {
-        setError('Une erreur inattendue est survenue. Veuillez réessayer.')
+        setError(t('login.error_unexpected'))
       }
     } finally {
       setIsLoading(false)
@@ -49,24 +55,18 @@ export default function LoginPage() {
       <div className="relative w-full max-w-md">
         {/* Logo and Brand */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-primary/10 mb-4">
-            <Shield className="w-8 h-8 text-primary" />
+          <div className="flex items-center justify-center mb-4">
+            <Image src="/smart2d_logo.jpeg" alt="Smart2D" width="160" height="160" className="h-16 w-auto object-contain" priority />
           </div>
           <h1 className="text-3xl font-bold tracking-tight text-foreground">
             ASKSMART
           </h1>
-          <p className="mt-2 text-muted-foreground text-balance">
-            Plateforme intelligente de questions-réponses sur vos données d&apos;audit
-          </p>
         </div>
 
         {/* Login Card */}
-        <Card className="border-border/50 shadow-xl shadow-black/5">
+        <Card className="border-2 border-foreground/20 shadow-xl shadow-black/10">
           <CardHeader className="space-y-1 pb-4">
-            <CardTitle className="text-xl font-semibold text-center">Connexion</CardTitle>
-            <CardDescription className="text-center">
-              Entrez vos identifiants pour accéder à l&apos;application
-            </CardDescription>
+            <CardTitle className="text-xl font-semibold text-center">{t('login.description')}</CardTitle>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
@@ -80,12 +80,12 @@ export default function LoginPage() {
               {/* Username Field */}
               <div className="space-y-2">
                 <Label htmlFor="username" className="text-sm font-medium">
-                  Identifiant
+                  {t('login.username')}
                 </Label>
                 <Input
                   id="username"
                   type="text"
-                  placeholder="Entrez votre identifiant"
+                  placeholder={t('login.username_ph')}
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   required
@@ -100,13 +100,13 @@ export default function LoginPage() {
               {/* Password Field */}
               <div className="space-y-2">
                 <Label htmlFor="password" className="text-sm font-medium">
-                  Mot de passe
+                  {t('login.password')}
                 </Label>
                 <div className="relative">
                   <Input
                     id="password"
                     type={showPassword ? 'text' : 'password'}
-                    placeholder="Entrez votre mot de passe"
+                    placeholder={t('login.password_ph')}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
@@ -121,7 +121,7 @@ export default function LoginPage() {
                     onClick={() => setShowPassword(!showPassword)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
                     tabIndex={-1}
-                    aria-label={showPassword ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}
+                    aria-label={showPassword ? t('login.hide_pwd') : t('login.show_pwd')}
                   >
                     {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
@@ -137,20 +137,16 @@ export default function LoginPage() {
                 {isLoading ? (
                   <>
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Connexion en cours...
+                    {t('login.submitting')}
                   </>
                 ) : (
-                  'Se connecter'
+                  t('login.submit')
                 )}
               </Button>
             </form>
           </CardContent>
         </Card>
 
-        {/* Footer */}
-        <p className="text-center text-xs text-muted-foreground mt-6">
-          Accès sécurisé aux données d&apos;audit
-        </p>
       </div>
     </div>
   )

@@ -46,6 +46,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { useAuth } from '@/lib/auth-context'
+import { useT } from '@/lib/i18n'
 import { getUsers, createUser, updateUserStatus, deleteUser, getAuditLogs, ApiError } from '@/lib/api'
 import type { AdminUser, AuditLogEntry } from '@/lib/types'
 import { cn } from '@/lib/utils'
@@ -64,6 +65,7 @@ function formatDate(dateString: string) {
 const SHOW_ACTIVITY_LOGS = false
 
 export default function AdminPage() {
+  const t = useT()
   const router = useRouter()
   const { user: currentUser } = useAuth()
   
@@ -156,7 +158,7 @@ export default function AdminPage() {
       if (err instanceof ApiError) {
         setCreateError(err.detail)
       } else {
-        setCreateError('Erreur lors de la création de l\'utilisateur')
+        setCreateError(t('admin.error_create'))
       }
     } finally {
       setIsCreating(false)
@@ -208,7 +210,7 @@ export default function AdminPage() {
       <div className="flex items-center justify-center h-full">
         <div className="text-center">
           <AlertCircle className="w-12 h-12 text-destructive mx-auto mb-4" />
-          <p className="text-lg font-medium">Accès réservé aux administrateurs</p>
+          <p className="text-lg font-medium">{t('admin.access_denied')}</p>
         </div>
       </div>
     )
@@ -219,9 +221,9 @@ export default function AdminPage() {
       {/* Header */}
       <header className="shrink-0 border-b border-border bg-card/50 backdrop-blur-sm">
         <div className="px-6 py-4">
-          <h1 className="text-2xl font-bold tracking-tight">Administration</h1>
+          <h1 className="text-2xl font-bold tracking-tight">{t('admin.title')}</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Gérez les utilisateurs
+            {t('admin.subtitle')}
           </p>
         </div>
       </header>
@@ -243,12 +245,12 @@ export default function AdminPage() {
           <TabsList className={cn("shrink-0 grid w-full max-w-md", SHOW_ACTIVITY_LOGS ? "grid-cols-2" : "grid-cols-1")}>
             <TabsTrigger value="users" className="gap-2">
               <Users className="w-4 h-4" />
-              Utilisateurs
+              {t('admin.tab_users')}
             </TabsTrigger>
             {SHOW_ACTIVITY_LOGS && (
               <TabsTrigger value="logs" className="gap-2">
                 <FileText className="w-4 h-4" />
-                Logs d&apos;activité
+                {t('admin.tab_logs')}
               </TabsTrigger>
             )}
           </TabsList>
@@ -261,29 +263,29 @@ export default function AdminPage() {
                   <div>
                     <CardTitle className="text-lg flex items-center gap-2">
                       <Users className="w-5 h-5 text-primary" />
-                      Gestion des utilisateurs
+                      {t('admin.users_management')}
                     </CardTitle>
                     <CardDescription>
-                      {users.length} utilisateur{users.length > 1 ? 's' : ''} enregistré{users.length > 1 ? 's' : ''}
+                      {users.length} {users.length > 1 ? t('admin.user_count_many') : t('admin.user_count_one')}
                     </CardDescription>
                   </div>
                   <div className="flex items-center gap-2">
                     <Button variant="outline" size="sm" onClick={loadUsers} disabled={isLoadingUsers}>
                       <RefreshCw className={cn('w-4 h-4 mr-2', isLoadingUsers && 'animate-spin')} />
-                      Actualiser
+                      {t('admin.refresh')}
                     </Button>
                     <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
                       <DialogTrigger asChild>
                         <Button size="sm">
                           <Plus className="w-4 h-4 mr-2" />
-                          Créer
+                          {t('admin.create')}
                         </Button>
                       </DialogTrigger>
                       <DialogContent>
                         <DialogHeader>
-                          <DialogTitle>Créer un utilisateur</DialogTitle>
+                          <DialogTitle>{t('admin.create_user')}</DialogTitle>
                           <DialogDescription>
-                            Créez un nouveau compte utilisateur pour accéder à ASKSMART
+                            {t('admin.create_desc')}
                           </DialogDescription>
                         </DialogHeader>
                         <div className="space-y-4 py-4">
@@ -293,18 +295,18 @@ export default function AdminPage() {
                             </div>
                           )}
                           <div className="space-y-2">
-                            <Label htmlFor="new-username">Identifiant</Label>
+                            <Label htmlFor="new-username">{t('admin.username')}</Label>
                             <Input
                               id="new-username"
                               value={newUsername}
                               onChange={(e) => setNewUsername(e.target.value)}
-                              placeholder="nouveau_utilisateur"
+                              placeholder={t('admin.username_ph')}
                               minLength={3}
                               maxLength={64}
                             />
                           </div>
                           <div className="space-y-2">
-                            <Label htmlFor="new-password">Mot de passe</Label>
+                            <Label htmlFor="new-password">{t('admin.password')}</Label>
                             <div className="relative">
                               <Input
                                 id="new-password"
@@ -327,7 +329,7 @@ export default function AdminPage() {
                           </div>
                           <div className="flex items-center justify-between">
                             <Label htmlFor="new-admin" className="cursor-pointer">
-                              Administrateur
+                              {t('admin.is_admin')}
                             </Label>
                             <Switch
                               id="new-admin"
@@ -338,7 +340,7 @@ export default function AdminPage() {
                         </div>
                         <DialogFooter>
                           <Button variant="outline" onClick={() => setCreateDialogOpen(false)}>
-                            Annuler
+                            {t('admin.cancel')}
                           </Button>
                           <Button
                             onClick={handleCreateUser}
@@ -347,10 +349,10 @@ export default function AdminPage() {
                             {isCreating ? (
                               <>
                                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                                Création...
+                                {t('admin.creating')}
                               </>
                             ) : (
-                              'Créer'
+                              t('admin.create')
                             )}
                           </Button>
                         </DialogFooter>
@@ -393,18 +395,18 @@ export default function AdminPage() {
                                 <p className="font-medium">{user.username}</p>
                                 {user.is_admin && (
                                   <Badge variant="secondary" className="text-xs">
-                                    Admin
+                                    {t('admin.role_admin')}
                                   </Badge>
                                 )}
                                 {!user.is_active && (
                                   <Badge variant="outline" className="text-xs text-muted-foreground">
-                                    Suspendu
+                                    {t('admin.role_suspended')}
                                   </Badge>
                                 )}
                               </div>
                               {user.created_at && (
                                 <p className="text-xs text-muted-foreground">
-                                  Créé le {formatDate(user.created_at)}
+                                  {t('admin.created_on')} {formatDate(user.created_at)}
                                 </p>
                               )}
                             </div>
@@ -415,7 +417,7 @@ export default function AdminPage() {
                               size="icon"
                               onClick={() => handleToggleUserStatus(user)}
                               disabled={user.id === currentUser?.id}
-                              title={user.is_active ? 'Suspendre' : 'Activer'}
+                              title={user.is_active ? t('admin.suspend') : t('admin.activate')}
                             >
                               {user.is_active ? (
                                 <UserX className="w-4 h-4 text-status-warning" />
@@ -428,7 +430,7 @@ export default function AdminPage() {
                               size="icon"
                               onClick={() => confirmDelete(user)}
                               disabled={user.id === currentUser?.id}
-                              title="Supprimer"
+                              title={t('admin.delete')}
                             >
                               <Trash2 className="w-4 h-4 text-destructive" />
                             </Button>
@@ -439,7 +441,7 @@ export default function AdminPage() {
                   ) : (
                     <div className="flex flex-col items-center justify-center py-12">
                       <Users className="w-12 h-12 text-muted-foreground mb-4" />
-                      <p className="text-muted-foreground">Aucun utilisateur</p>
+                      <p className="text-muted-foreground">{t('admin.no_users')}</p>
                     </div>
                   )}
                 </ScrollArea>
@@ -456,15 +458,15 @@ export default function AdminPage() {
                   <div>
                     <CardTitle className="text-lg flex items-center gap-2">
                       <FileText className="w-5 h-5 text-primary" />
-                      Logs d&apos;activité
+                      {t('admin.logs_title')}
                     </CardTitle>
                     <CardDescription>
-                      {auditLogs.length} entrée{auditLogs.length > 1 ? 's' : ''} récente{auditLogs.length > 1 ? 's' : ''}
+                      {auditLogs.length} {auditLogs.length > 1 ? t('admin.logs_count_many') : t('admin.logs_count_one')}
                     </CardDescription>
                   </div>
                   <Button variant="outline" size="sm" onClick={loadAuditLogs} disabled={isLoadingLogs}>
                     <RefreshCw className={cn('w-4 h-4 mr-2', isLoadingLogs && 'animate-spin')} />
-                    Actualiser
+                    {t('admin.refresh')}
                   </Button>
                 </div>
               </CardHeader>
@@ -480,19 +482,19 @@ export default function AdminPage() {
                         <thead className="sticky top-0 bg-card border-b border-border">
                           <tr>
                             <th className="text-left font-medium p-3 text-xs text-muted-foreground uppercase tracking-wider">
-                              Date
+                              {t('admin.col_date')}
                             </th>
                             <th className="text-left font-medium p-3 text-xs text-muted-foreground uppercase tracking-wider">
-                              Utilisateur
+                              {t('admin.col_user')}
                             </th>
                             <th className="text-left font-medium p-3 text-xs text-muted-foreground uppercase tracking-wider">
-                              Action
+                              {t('admin.col_action')}
                             </th>
                             <th className="text-left font-medium p-3 text-xs text-muted-foreground uppercase tracking-wider">
-                              Statut
+                              {t('admin.col_status')}
                             </th>
                             <th className="text-left font-medium p-3 text-xs text-muted-foreground uppercase tracking-wider">
-                              Détails
+                              {t('admin.col_details')}
                             </th>
                           </tr>
                         </thead>
@@ -528,7 +530,7 @@ export default function AdminPage() {
                   ) : (
                     <div className="flex flex-col items-center justify-center py-12">
                       <FileText className="w-12 h-12 text-muted-foreground mb-4" />
-                      <p className="text-muted-foreground">Aucun log d&apos;activité</p>
+                      <p className="text-muted-foreground">{t('admin.no_logs')}</p>
                     </div>
                   )}
                 </ScrollArea>
@@ -543,14 +545,14 @@ export default function AdminPage() {
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Supprimer l&apos;utilisateur</AlertDialogTitle>
+            <AlertDialogTitle>{t('admin.delete_title')}</AlertDialogTitle>
             <AlertDialogDescription>
-              Êtes-vous sûr de vouloir supprimer l&apos;utilisateur{' '}
-              <strong>{userToDelete?.username}</strong> ? Cette action est irréversible.
+              {t('admin.delete_confirm_pre')}{' '}
+              <strong>{userToDelete?.username}</strong> {t('admin.delete_confirm_post')}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Annuler</AlertDialogCancel>
+            <AlertDialogCancel>{t('admin.cancel')}</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDeleteUser}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
@@ -559,10 +561,10 @@ export default function AdminPage() {
               {isDeleting ? (
                 <>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Suppression...
+                  {t('admin.deleting')}
                 </>
               ) : (
-                'Supprimer'
+                t('admin.delete')
               )}
             </AlertDialogAction>
           </AlertDialogFooter>

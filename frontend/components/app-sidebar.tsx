@@ -10,7 +10,6 @@ import {
   LogOut,
   Menu,
   Database,
-  Shield,
   Eye,
   EyeOff,
   MessageSquare,
@@ -31,17 +30,18 @@ import {
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { useAuth } from '@/lib/auth-context'
+import { useT } from '@/lib/i18n'
 import type { OracleStatus, HistoryEntry } from '@/lib/types'
 import { cn } from '@/lib/utils'
 
-const navItems = [
-  { title: 'Accueil', href: '/', icon: Home },
-  { title: 'Historique', href: '/history', icon: History },
-  { title: 'Paramètres', href: '/settings', icon: Settings },
+const navItemsBase = [
+  { key: 'nav.home', href: '/', icon: Home },
+  { key: 'nav.history', href: '/history', icon: History },
+  { key: 'nav.settings', href: '/settings', icon: Settings },
 ]
 
-const adminItems = [
-  { title: 'Administration', href: '/admin', icon: ShieldCheck },
+const adminItemsBase = [
+  { key: 'nav.admin', href: '/admin', icon: ShieldCheck },
 ]
 
 interface AppSidebarProps {
@@ -59,20 +59,21 @@ interface AppSidebarProps {
 function OracleStatusBadge({ status }: { status: OracleStatus }) {
   const { state } = useSidebar()
   const isCollapsed = state === 'collapsed'
+  const t = useT()
 
   const statusConfig = {
     connected: {
-      label: 'Oracle connecté',
+      label: t('oracle.connected'),
       color: 'bg-status-success',
       textColor: 'text-status-success',
     },
     inactive: {
-      label: 'Oracle inactif',
+      label: t('oracle.inactive'),
       color: 'bg-status-warning',
       textColor: 'text-status-warning',
     },
     disconnected: {
-      label: 'Oracle déconnecté',
+      label: t('oracle.disconnected'),
       color: 'bg-status-error',
       textColor: 'text-status-error',
     },
@@ -113,6 +114,9 @@ export function AppSidebar({
   const pathname = usePathname()
   const { user, logout } = useAuth()
   const { state } = useSidebar()
+  const t = useT()
+  const navItems = navItemsBase.map(i => ({ ...i, title: t(i.key) }))
+  const adminItems = adminItemsBase.map(i => ({ ...i, title: t(i.key) }))
   const isCollapsed = state === 'collapsed'
 
   const handleLogout = async () => {
@@ -129,9 +133,6 @@ export function AppSidebar({
           </SidebarTrigger>
           {!isCollapsed && (
             <div className="flex items-center gap-2 overflow-hidden">
-              <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-                <Shield className="w-4 h-4 text-primary" />
-              </div>
               <span className="font-semibold text-sm tracking-tight truncate">ASKSMART</span>
             </div>
           )}
@@ -180,7 +181,7 @@ export function AppSidebar({
             <Separator className="mx-3 my-1 w-auto" />
             <div className="px-3 pb-1">
               <p className="px-1 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-                Colonnes
+                {t('sidebar.columns')}
               </p>
               <div className="mt-1 space-y-1">
                 <button
@@ -190,7 +191,7 @@ export function AppSidebar({
                     showUsersColumn ? 'text-foreground' : 'text-muted-foreground'
                   )}
                 >
-                  <span>Utilisateurs</span>
+                  <span>{t('sidebar.users')}</span>
                   {showUsersColumn ? <EyeOff className="h-3.5 w-3.5 text-muted-foreground" /> : <Eye className="h-3.5 w-3.5" />}
                 </button>
                 <button
@@ -200,7 +201,7 @@ export function AppSidebar({
                     showTablesColumn ? 'text-foreground' : 'text-muted-foreground'
                   )}
                 >
-                  <span>Tables</span>
+                  <span>{t('sidebar.tables')}</span>
                   {showTablesColumn ? <EyeOff className="h-3.5 w-3.5 text-muted-foreground" /> : <Eye className="h-3.5 w-3.5" />}
                 </button>
                 <button
@@ -210,7 +211,7 @@ export function AppSidebar({
                     showActionsColumn ? 'text-foreground' : 'text-muted-foreground'
                   )}
                 >
-                  <span>Actions</span>
+                  <span>{t('sidebar.actions')}</span>
                   {showActionsColumn ? <EyeOff className="h-3.5 w-3.5 text-muted-foreground" /> : <Eye className="h-3.5 w-3.5" />}
                 </button>
               </div>
@@ -221,7 +222,7 @@ export function AppSidebar({
                 <Separator className="mx-3 my-1 w-auto" />
                 <div className="flex-1 min-h-0 px-3 pb-1 flex flex-col">
                   <p className="px-1 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-                    Dernières questions
+                    {t('sidebar.recent')}
                   </p>
                   <div className="mt-1 space-y-1 flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
                     {recentHistory.map((entry, i) => (
@@ -255,7 +256,7 @@ export function AppSidebar({
               <div className="flex-1 min-w-0">
                 <p className="text-xs font-medium truncate">{user?.username}</p>
                 <p className="text-[10px] text-muted-foreground">
-                  {user?.is_admin ? 'Administrateur' : 'Utilisateur'}
+                  {user?.is_admin ? t('sidebar.role_admin') : t('sidebar.role_user')}
                 </p>
               </div>
             </div>
@@ -266,7 +267,7 @@ export function AppSidebar({
               className="w-full justify-start text-muted-foreground hover:text-destructive hover:bg-destructive/10"
             >
               <LogOut className="w-4 h-4" />
-              <span className="ml-2">Déconnexion</span>
+              <span className="ml-2">{t('nav.logout')}</span>
             </Button>
             <Separator className="my-0.5" />
           </>

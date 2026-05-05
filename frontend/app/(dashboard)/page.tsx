@@ -25,74 +25,45 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { useAppData } from "@/components/app-shell"
 import { submitTrackedQuery, ApiError } from "@/lib/api"
+import { useT, useLang, translate } from "@/lib/i18n"
 import type { QueryProgress, QueryResponse, QueryProgressStep } from "@/lib/types"
 import { cn } from "@/lib/utils"
 
-const auditActions = [
-  { name: "SELECT", desc: "Lecture de donnees depuis une table ou vue" },
-  { name: "INSERT", desc: "Ajout de nouvelles lignes dans une table" },
-  { name: "UPDATE", desc: "Modification de donnees existantes" },
-  { name: "DELETE", desc: "Suppression de lignes dans une table" },
-  { name: "GRANT", desc: "Attribution de privileges a un utilisateur" },
-  { name: "REVOKE", desc: "Retrait de privileges a un utilisateur" },
-  { name: "ALTER", desc: "Modification de la structure d un objet" },
-  { name: "DROP", desc: "Suppression d un objet (table, vue, index)" },
-  { name: "CREATE", desc: "Creation d un nouvel objet dans la base" },
-  { name: "TRUNCATE", desc: "Vidage complet d une table" },
-  { name: "EXECUTE", desc: "Execution d une procedure ou fonction" },
-  { name: "LOGON", desc: "Connexion d un utilisateur a la base" },
-  { name: "LOGOFF", desc: "Deconnexion d un utilisateur" },
-]
+const AUDIT_ACTION_NAMES = [
+  "SELECT", "INSERT", "UPDATE", "DELETE", "GRANT", "REVOKE", "ALTER",
+  "DROP", "CREATE", "TRUNCATE", "EXECUTE", "LOGON", "LOGOFF",
+] as const
 
 const USERS_VISIBLE_ITEMS = 13
 const TABLES_VISIBLE_ITEMS = 14
 const ACTIONS_VISIBLE_ITEMS = 7
 const MIN_QUESTION_LINES = 2
 const MAX_QUESTION_LINES = 4
-const ANALYSIS_STEPS: Array<Pick<QueryProgressStep, "key" | "label" | "summary">> = [
-  {
-    key: "generate_sql",
-    label: "Generation SQL",
-    summary: "Transformation de la question en requete Oracle",
-  },
-  {
-    key: "connect_oracle",
-    label: "Connexion Oracle",
-    summary: "Ouverture de la connexion a la base d audit",
-  },
-  {
-    key: "execute_sql",
-    label: "Execution",
-    summary: "Lecture des donnees correspondant a la demande",
-  },
-  {
-    key: "build_synthesis",
-    label: "Traduction",
-    summary: "Transformation de la reponse brute en resume clair",
-  },
-  {
-    key: "finalize",
-    label: "Finalisation",
-    summary: "Preparation des resultats pour l interface",
-  },
+const ANALYSIS_STEP_KEYS: Array<{ key: string; i18n: string }> = [
+  { key: "generate_sql", i18n: "step.gen_sql" },
+  { key: "connect_oracle", i18n: "step.connect" },
+  { key: "execute_sql", i18n: "step.exec" },
+  { key: "build_synthesis", i18n: "step.translate" },
+  { key: "finalize", i18n: "step.finalize" },
 ]
 
-const FRIENDLY_COLUMN_NAMES: Record<string, string> = {
-  DBUSERNAME: "Utilisateur",
-  USERNAME: "Utilisateur",
-  ACTION_NAME: "Action",
-  EVENT_TIMESTAMP: "Date et heure",
-  OBJECT_NAME: "Objet",
-  OBJECT_SCHEMA: "Schema",
-  USERHOST: "Poste",
-  SESSIONID: "Session",
-  SQL_TEXT: "Texte SQL",
-  INSTANCE: "Instance",
+const FRIENDLY_COLUMN_KEYS: Record<string, string> = {
+  DBUSERNAME: "col.DBUSERNAME",
+  USERNAME: "col.USERNAME",
+  ACTION_NAME: "col.ACTION_NAME",
+  EVENT_TIMESTAMP: "col.EVENT_TIMESTAMP",
+  OBJECT_NAME: "col.OBJECT_NAME",
+  OBJECT_SCHEMA: "col.OBJECT_SCHEMA",
+  USERHOST: "col.USERHOST",
+  SESSIONID: "col.SESSIONID",
+  SQL_TEXT: "col.SQL_TEXT",
+  INSTANCE: "col.INSTANCE",
 }
 
-function toFriendlyColumnName(key: string): string {
+function toFriendlyColumnName(key: string, lang: "fr" | "en"): string {
   const normalized = key.toUpperCase()
-  if (FRIENDLY_COLUMN_NAMES[normalized]) return FRIENDLY_COLUMN_NAMES[normalized]
+  const i18nKey = FRIENDLY_COLUMN_KEYS[normalized]
+  if (i18nKey) return translate(lang, i18nKey)
   return normalized
     .split("_")
     .map((part) => part.charAt(0) + part.slice(1).toLowerCase())
@@ -131,6 +102,9 @@ function getRunningStageDuration(progress: QueryProgress, step: QueryProgressSte
 }
 
 export default function HomePage() {
+  const t = useT()
+  const lang = useLang()
+  const auditActions = AUDIT_ACTION_NAMES.map((name) => ({ name, desc: t(`audit.${name}`) }))
   const {
     metadata,
     refreshMetadata,
@@ -199,12 +173,14 @@ export default function HomePage() {
       request_id: "pending",
       status: "running",
       current_step: null,
-      current_summary: "Initialisation de l analyse",
+      current_summary: t('dashboard.init'),
       elapsed_seconds: 0,
       error: null,
       result: null,
-      steps: ANALYSIS_STEPS.map((step) => ({
-        ...step,
+      steps: ANALYSIS_STEP_KEYS.map((step) => ({
+        key: step.key,
+        label: t(`${step.i18n}.label`),
+        summary: t(`${step.i18n}.summary`),
         status: "pending",
         duration_seconds: null,
       })),
@@ -232,14 +208,14 @@ export default function HomePage() {
           ? {
               ...current,
               status: "error",
-              error: err instanceof ApiError ? err.detail : "Une erreur inattendue est survenue.",
+              error: err instanceof ApiError ? err.detail : t('dashboard.error_unexpected'),
             }
           : null
       )
       if (err instanceof ApiError) {
-        setError(err.status === 429 ? "Trop de requetes. Veuillez patienter." : err.detail)
+        setError(err.status === 429 ? t('dashboard.error_too_many') : err.detail)
       } else {
-        setError("Une erreur inattendue est survenue.")
+        setError(t('dashboard.error_unexpected'))
       }
     } finally {
       setIsLoading(false)
@@ -256,9 +232,16 @@ export default function HomePage() {
   return (
     <div className="flex flex-col h-full">
       <header className="shrink-0 border-b-2 border-foreground/10 bg-card">
-        <div className="px-6 py-4">
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">Posez votre question</h1>
-          <p className="text-sm text-muted-foreground mt-1">Interrogez vos donnees d audit en francais</p>
+        <div className="px-6 py-4 flex items-center justify-between gap-4">
+          <div className="min-w-0">
+            <h1 className="text-2xl font-bold tracking-tight text-foreground">{t('dashboard.title')}</h1>
+            <p className="text-sm text-muted-foreground mt-1">{t('dashboard.subtitle')}</p>
+          </div>
+          <img
+            src="/smart2d_logo.jpeg"
+            alt="Smart2D"
+            className="h-9 w-auto object-contain shrink-0"
+          />
         </div>
       </header>
 
@@ -270,7 +253,7 @@ export default function HomePage() {
                 <form onSubmit={handleSubmit} className="relative">
                   <Textarea
                     ref={questionInputRef}
-                    placeholder="Ex: Qui a modifie la table EMPLOYEES hier ?"
+                    placeholder={t('dashboard.placeholder')}
                     value={question}
                     onChange={(e) => handleQuestionChange(e.target.value)}
                     rows={MIN_QUESTION_LINES}
@@ -282,7 +265,7 @@ export default function HomePage() {
                     size="icon"
                     disabled={!question.trim() || isLoading}
                     className="absolute right-2 bottom-2 h-8 w-8"
-                    title="Envoyer la question"
+                    title={t('dashboard.send')}
                   >
                     {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <SendHorizontal className="w-4 h-4" />}
                   </Button>
@@ -299,7 +282,7 @@ export default function HomePage() {
                         <AlertCircle className="w-4 h-4 text-primary" />
                       </div>
                       <div>
-                        <p className="font-semibold text-primary text-sm">Erreur</p>
+                        <p className="font-semibold text-primary text-sm">{t('dashboard.error')}</p>
                         <p className="text-xs text-foreground/70 mt-1">{error}</p>
                       </div>
                     </div>
@@ -320,11 +303,11 @@ export default function HomePage() {
                         <div className="min-w-0">
                           <CardTitle className="text-sm flex items-center gap-2 text-foreground">
                             <Loader2 className="w-4 h-4 text-primary animate-spin" />
-                            Analyse en cours
+                            {t('dashboard.analyzing')}
                           </CardTitle>
                           {showAnalysisDetails && (
                             <p className="text-xs text-muted-foreground mt-1 truncate">
-                              {queryProgress.current_summary || "Traitement de votre demande"}
+                              {queryProgress.current_summary || t('dashboard.processing')}
                             </p>
                           )}
                         </div>
@@ -344,7 +327,7 @@ export default function HomePage() {
                             size="icon"
                             className={cn("w-7", showAnalysisDetails ? "h-7" : "h-6")}
                             onClick={() => setShowAnalysisDetails((value) => !value)}
-                            title={showAnalysisDetails ? "Masquer les etapes" : "Afficher les etapes"}
+                            title={showAnalysisDetails ? t('dashboard.hide_steps') : t('dashboard.show_steps')}
                           >
                             {showAnalysisDetails ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                           </Button>
@@ -397,7 +380,7 @@ export default function HomePage() {
                     <CardContent className="py-2 px-3">
                       <p className="text-sm font-bold leading-relaxed text-foreground flex items-start gap-2">
                         <MessageSquare className="w-4 h-4 text-primary mt-0.5 shrink-0" />
-                        <span>Question: {result.question}</span>
+                        <span>{t('dashboard.question_label')}: {result.question}</span>
                       </p>
                     </CardContent>
                   </Card>
@@ -406,7 +389,7 @@ export default function HomePage() {
                     <CardContent className="py-3 px-3 bg-status-success/5">
                       <p className="text-base font-bold leading-relaxed text-foreground flex items-start gap-2">
                         <Zap className="w-4 h-4 text-status-success mt-1 shrink-0" />
-                        <span>Synthese: {result.synthesis}</span>
+                        <span>{t('dashboard.synthesis_label')}: {result.synthesis}</span>
                       </p>
                     </CardContent>
                   </Card>
@@ -416,9 +399,9 @@ export default function HomePage() {
                       <CardHeader className="py-1.5 px-3 border-b border-foreground/5">
                         <div className="flex items-center justify-between">
                           <CardTitle className="text-sm flex items-center gap-2 text-foreground">
-                            <Table className="w-4 h-4 text-primary" />Resultats
+                            <Table className="w-4 h-4 text-primary" />{t('dashboard.results_label')}
                           </CardTitle>
-                          <Badge className="font-mono text-xs bg-foreground text-primary-foreground">{result.row_count} lignes</Badge>
+                          <Badge className="font-mono text-xs bg-foreground text-primary-foreground">{result.row_count} {t('dashboard.rows')}</Badge>
                         </div>
                       </CardHeader>
                       <CardContent className="py-2 px-3">
@@ -428,7 +411,7 @@ export default function HomePage() {
                                 <tr className="border-b-2 border-foreground/20">
                                   {Object.keys(result.rows[0]).map((key) => (
                                     <th key={key} className="text-left font-bold p-1.5 text-xs text-foreground uppercase tracking-wider">
-                                      {toFriendlyColumnName(key)}
+                                      {toFriendlyColumnName(key, lang)}
                                     </th>
                                   ))}
                                 </tr>
@@ -457,8 +440,8 @@ export default function HomePage() {
                     <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-2 border-2 border-primary/20">
                       <Search className="w-5 h-5 text-primary" />
                     </div>
-                    <p className="text-foreground font-medium text-sm">Posez une question pour interroger vos donnees</p>
-                    <p className="text-xs text-muted-foreground mt-1">Ex : Qui a modifie la table EMPLOYEES ?</p>
+                    <p className="text-foreground font-medium text-sm">{t('dashboard.empty_title')}</p>
+                    <p className="text-xs text-muted-foreground mt-1">{t('dashboard.empty_subtitle')}</p>
                   </div>
                 </Card>
               )}
@@ -476,18 +459,18 @@ export default function HomePage() {
                           <Users className="w-4 h-4" />
                         </div>
                         <div className="min-w-0">
-                          <span className="text-foreground font-semibold">Utilisateurs</span>
+                          <span className="text-foreground font-semibold">{t('dashboard.users_title')}</span>
                         </div>
                       </div>
-                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setShowUsersColumn(false)} title="Masquer la colonne">
+                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setShowUsersColumn(false)} title={t('dashboard.hide_column')}>
                         <EyeOff className="w-4 h-4" />
                       </Button>
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="p-3 flex-1 min-h-0 flex flex-col">
                     <div className="flex items-center justify-between text-[11px] text-muted-foreground font-semibold px-1 pb-1">
-                      <span>Utilisateur</span>
-                      <span>Occurrence</span>
+                      <span>{t('dashboard.col_user')}</span>
+                      <span>{t('dashboard.col_occurrence')}</span>
                     </div>
                     <div className="space-y-1.5 flex-1 min-h-0 overflow-auto">
                       {visibleUsers && visibleUsers.length > 0 ? (
@@ -498,13 +481,13 @@ export default function HomePage() {
                           </div>
                         ))
                       ) : (
-                        <p className="text-xs text-muted-foreground text-center py-4">Aucun utilisateur</p>
+                        <p className="text-xs text-muted-foreground text-center py-4">{t('dashboard.no_users')}</p>
                       )}
                     </div>
                     {usersCount > USERS_VISIBLE_ITEMS && (
                       <Button variant="ghost" size="sm" className="w-full mt-3 h-7 text-xs text-muted-foreground hover:text-primary border border-foreground/10" onClick={() => setExpandedUsers(!expandedUsers)}>
                         {expandedUsers ? <ChevronUp className="w-3.5 h-3.5 mr-1" /> : <ChevronDown className="w-3.5 h-3.5 mr-1" />}
-                        {expandedUsers ? "Reduire" : `+${usersCount - USERS_VISIBLE_ITEMS} plus`}
+                        {expandedUsers ? t('dashboard.collapse') : `+${usersCount - USERS_VISIBLE_ITEMS} ${t('dashboard.more')}`}
                       </Button>
                     )}
                   </CardContent>
@@ -520,18 +503,18 @@ export default function HomePage() {
                           <Database className="w-4 h-4" />
                         </div>
                         <div className="min-w-0">
-                          <span className="text-foreground font-semibold">Tables</span>
+                          <span className="text-foreground font-semibold">{t('dashboard.tables_title')}</span>
                         </div>
                       </div>
-                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setShowTablesColumn(false)} title="Masquer la colonne">
+                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setShowTablesColumn(false)} title={t('dashboard.hide_column')}>
                         <EyeOff className="w-4 h-4" />
                       </Button>
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="p-3 flex-1 min-h-0 flex flex-col">
                     <div className="flex items-center justify-between text-[11px] text-muted-foreground font-semibold px-1 pb-1">
-                      <span>Table</span>
-                      <span>Occurrence</span>
+                      <span>{t('dashboard.col_table')}</span>
+                      <span>{t('dashboard.col_occurrence')}</span>
                     </div>
                     <div className="space-y-1.5 flex-1 min-h-0 overflow-auto">
                       {visibleTables && visibleTables.length > 0 ? (
@@ -542,13 +525,13 @@ export default function HomePage() {
                           </div>
                         ))
                       ) : (
-                        <p className="text-xs text-muted-foreground text-center py-4">Aucun objet</p>
+                        <p className="text-xs text-muted-foreground text-center py-4">{t('dashboard.no_objects')}</p>
                       )}
                     </div>
                     {tablesCount > TABLES_VISIBLE_ITEMS && (
                       <Button variant="ghost" size="sm" className="w-full mt-3 h-7 text-xs text-muted-foreground hover:text-primary border border-foreground/10" onClick={() => setExpandedTables(!expandedTables)}>
                         {expandedTables ? <ChevronUp className="w-3.5 h-3.5 mr-1" /> : <ChevronDown className="w-3.5 h-3.5 mr-1" />}
-                        {expandedTables ? "Reduire" : `+${tablesCount - TABLES_VISIBLE_ITEMS} plus`}
+                        {expandedTables ? t('dashboard.collapse') : `+${tablesCount - TABLES_VISIBLE_ITEMS} ${t('dashboard.more')}`}
                       </Button>
                     )}
                   </CardContent>
@@ -564,11 +547,11 @@ export default function HomePage() {
                           <Zap className="w-4 h-4" />
                         </div>
                         <div>
-                          <span className="text-foreground font-semibold">Actions</span>
-                          <p className="text-xs font-normal text-muted-foreground">Types audites</p>
+                          <span className="text-foreground font-semibold">{t('dashboard.actions_title')}</span>
+                          <p className="text-xs font-normal text-muted-foreground">{t('dashboard.actions_subtitle')}</p>
                         </div>
                       </div>
-                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setShowActionsColumn(false)} title="Masquer la colonne">
+                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setShowActionsColumn(false)} title={t('dashboard.hide_column')}>
                         <EyeOff className="w-4 h-4" />
                       </Button>
                     </CardTitle>
@@ -585,7 +568,7 @@ export default function HomePage() {
                     {auditActions.length > ACTIONS_VISIBLE_ITEMS && (
                       <Button variant="ghost" size="sm" className="w-full mt-3 h-7 text-xs text-muted-foreground hover:text-primary border border-foreground/10" onClick={() => setExpandedActions(!expandedActions)}>
                         {expandedActions ? <ChevronUp className="w-3.5 h-3.5 mr-1" /> : <ChevronDown className="w-3.5 h-3.5 mr-1" />}
-                        {expandedActions ? "Reduire" : `+${auditActions.length - ACTIONS_VISIBLE_ITEMS} plus`}
+                        {expandedActions ? t('dashboard.collapse') : `+${auditActions.length - ACTIONS_VISIBLE_ITEMS} ${t('dashboard.more')}`}
                       </Button>
                     )}
                   </CardContent>
