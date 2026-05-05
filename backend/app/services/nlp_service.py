@@ -20,15 +20,19 @@ except Exception:
 
 def _system_prompt(table_name: str) -> str:
     # IMPORTANT: doit rester strictement aligne sur le SYSTEM_PROMPT_TRAIN
-    # du notebook (cellule 10) pour eviter toute divergence Colab vs prod.
+    # du notebook (cellule 12) pour eviter toute divergence Colab vs prod.
+    # Le notebook V13 entraine avec "Table : ORACLE_AUDIT_TRAIL" comme
+    # nom logique stable. Le _post_process_sql() ci-dessous remappe ensuite
+    # vers la vraie table prod (table_name = get_oracle_table()).
+    # Cela permet de changer la table prod sans re-entrainer le LoRA.
     return (
         "Tu es un expert SQL Oracle specialise en audit.\n"
-        f"Table : {table_name}\n"
+        "Table : ORACLE_AUDIT_TRAIL\n"
         "Colonnes reelles : ID, AUDIT_TYPE, SESSIONID, OS_USERNAME, USERHOST, TERMINAL, "
         "AUTHENTICATION_TYPE, DBUSERNAME, CLIENT_PROGRAM_NAME, OBJECT_SCHEMA, OBJECT_NAME, "
         "SQL_TEXT, SQL_BINDS, EVENT_TIMESTAMP, ACTION_NAME, INSTANCE.\n"
         "REGLES ABSOLUES :\n"
-        f"1. Tu ne dois interroger qu'une seule table : {table_name}.\n"
+        "1. Tu ne dois interroger qu'une seule table : ORACLE_AUDIT_TRAIL.\n"
         "2. N'utilise jamais DBA_USERS, ALL_USERS, USER_USERS ni aucune autre table ou vue.\n"
         "3. Pour compter des utilisateurs, utilise COUNT(DISTINCT DBUSERNAME) et ignore les NULL.\n"
         "4. Connexions : toujours WHERE ACTION_NAME='LOGON'.\n"

@@ -143,7 +143,10 @@ Système **maison** sans lib externe, dans [lib/i18n.ts](frontend/lib/i18n.ts).
 
 ## 6. Modèle Oracle ciblé
 
-Table : `SMART2DSECU.UNIFIED_AUDIT_DATA`
+Table prod : `SMART2DSECU.UNIFIED_AUDIT_DATA`
+Table logique d'entraînement : `ORACLE_AUDIT_TRAIL` (alias stable)
+
+> **Stratégie alias V13** (importante !) : le LoRA est entraîné avec `Table : ORACLE_AUDIT_TRAIL` dans son SYSTEM_PROMPT et tous les SQL outputs du dataset utilisent `FROM ORACLE_AUDIT_TRAIL`. Le **backend** rewrites ensuite via `_post_process_sql()` → vers la vraie table `get_oracle_table()` (= `SMART2DSECU.UNIFIED_AUDIT_DATA`). Cela permet de changer la table prod sans réentraîner le modèle. Le `SYSTEM_PROMPT` du backend doit donc dire `Table : ORACLE_AUDIT_TRAIL` (et non la vraie table), pour rester strictement aligné sur l'entraînement.
 
 Colonnes principales utilisées par le LoRA :
 `ID, AUDIT_TYPE, SESSIONID, OS_USERNAME, USERHOST, TERMINAL, AUTHENTICATION_TYPE, DBUSERNAME,
@@ -255,6 +258,7 @@ npm run dev
 | Avr 23–Mai 4 | V13 préparé : suppression DBA_USERS, alignement prompts, GGUF Q4 |
 | Mai 5 | Logo Smart2D, refonte UI (login/dashboard/sidebar), i18n FR/EN complet |
 | Mai 5 | Push GitHub `d5e3e33` |
+| Mai 5 | V13 finalisé : RETURNCODE retiré du dataset, alignement strict SYSTEM_PROMPT backend↔notebook (alias `ORACLE_AUDIT_TRAIL` + rewriter prod) |
 
 ---
 
