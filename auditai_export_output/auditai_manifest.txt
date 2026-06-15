@@ -1,0 +1,22 @@
+AUDITAI MANIFEST
+============================================================
+
+Generated : 2026-06-15 17:09:00.494940
+Project root : C:\dossier3\nlp
+
+Exported files : 14101
+Export parts : 13
+
+auditai_export_part_1.txt
+auditai_export_part_2.txt
+auditai_export_part_3.txt
+auditai_export_part_4.txt
+auditai_export_part_5.txt
+auditai_export_part_6.txt
+auditai_export_part_7.txt
+auditai_export_part_8.txt
+auditai_export_part_9.txt
+auditai_export_part_10.txt
+auditai_export_part_11.txt
+auditai_export_part_12.txt
+auditai_export_part_13.txt

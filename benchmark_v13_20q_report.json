@@ -1,0 +1,267 @@
+{
+  "total": 20,
+  "ok": 12,
+  "warn": 6,
+  "ko": 2,
+  "verdict": "V13.5 → 2-3 patchs ciblés du dataset",
+  "details": [
+    {
+      "tag": "A1",
+      "question": "Qui s'est connecté ce matin ?",
+      "sql": "SELECT DBUSERNAME, EVENT_TIMESTAMP FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE ACTION_NAME='LOGON' AND TRUNC(EVENT_TIMESTAMP)=TRUNC(SYSDATE) ORDER BY EVENT_TIMESTAMP DESC FETCH FIRST 10 ROWS ONLY;",
+      "synthesis": "Aucune activite detectee pour cette demande. Essayez de reformuler votre question avec d'autres termes.",
+      "row_count": 0,
+      "error": null,
+      "blocked": false,
+      "verdict": "✅",
+      "issues": [],
+      "duration": 33.35425090789795
+    },
+    {
+      "tag": "A2",
+      "question": "Combien de connexions ont eu lieu cette semaine ?",
+      "sql": "SELECT COUNT(*) AS NB FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE ACTION_NAME='LOGON' AND TRUNC(EVENT_TIMESTAMP,'IW')=TRUNC(SYSDATE,'IW');",
+      "synthesis": "Le resultat est : 0.",
+      "row_count": 1,
+      "error": null,
+      "blocked": false,
+      "verdict": "⚠️",
+      "issues": [
+        "Mots-clés manquants: ['SYSDATE-7']"
+      ],
+      "duration": 31.732059955596924
+    },
+    {
+      "tag": "A3",
+      "question": "Liste les utilisateurs ayant fait au moins 10 connexions sur les 30 derniers jours.",
+      "sql": "SELECT DBUSERNAME, COUNT(*) AS NB FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE ACTION_NAME='LOGON' AND TRUNC(EVENT_TIMESTAMP)>=TRUNC(SYSDATE-10) GROUP BY DBUSERNAME ORDER BY NB DESC;",
+      "synthesis": "1. Utilisateur SYSTEM a eu 6 connexions sur les 30 derniers jours.\n2. Utilisateur CYRILLE_TBS a eu 3 connexions sur les 30 derniers jours.\n3. Aucun utilisateur n'a dépassé 10 connexions sur les 30 derniers jours.",
+      "row_count": 3,
+      "error": null,
+      "blocked": false,
+      "verdict": "⚠️",
+      "issues": [
+        "Mots-clés manquants: ['HAVING']"
+      ],
+      "duration": 49.70400905609131
+    },
+    {
+      "tag": "B4",
+      "question": "Quels sont les 5 utilisateurs les plus actifs ce mois-ci ?",
+      "sql": "SELECT DBUSERNAME, COUNT(*) AS NB FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE ACTION_NAME='LOGON' AND TRUNC(EVENT_TIMESTAMP,'MM')=TRUNC(SYSDATE,'MM') GROUP BY DBUSERNAME ORDER BY NB DESC FETCH FIRST 5 ROWS ONLY;",
+      "synthesis": "1. SYSTEM a effectué 6 actions ce mois-ci.\n2. CYRILLE_TBS a effectué 3 actions ce mois-ci.\n3. SMART2DSECU a effectué 1 action ce mois-ci.\n4. Il n'y a pas d'autres utilisateurs avec plus de 4 actions.\n5. Aucun utilisateur n'a dépassé 6 actions ce mois-ci.",
+      "row_count": 3,
+      "error": null,
+      "blocked": false,
+      "verdict": "✅",
+      "issues": [],
+      "duration": 53.815332651138306
+    },
+    {
+      "tag": "B5",
+      "question": "Donne le top 10 des objets les plus consultés cette semaine.",
+      "sql": "SELECT OBJECT_NAME, COUNT(*) AS NB FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE ACTION_NAME='SELECT' AND OBJECT_NAME IS NOT NULL AND TRUNC(EVENT_TIMESTAMP,'IW')=TRUNC(SYSDATE,'IW') GROUP BY OBJECT_NAME ORDER BY NB DESC FETCH FIRST 10 ROWS ONLY;",
+      "synthesis": "Aucune activite detectee pour cette demande. Essayez de reformuler votre question avec d'autres termes.",
+      "row_count": 0,
+      "error": null,
+      "blocked": false,
+      "verdict": "✅",
+      "issues": [],
+      "duration": 40.508384227752686
+    },
+    {
+      "tag": "B6",
+      "question": "Quelle est l'action la plus fréquente sur les 7 derniers jours ?",
+      "sql": "SELECT DBUSERNAME, ACTION_NAME, COUNT(*) AS NB FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE ACTION_NAME IN ('INSERT','UPDATE','DELETE') AND TRUNC(EVENT_TIMESTAMP)>=TRUNC(SYSDATE-7) GROUP BY DBUSERNAME, ACTION_NAME ORDER BY NB DESC;",
+      "synthesis": "Aucune activite detectee pour cette demande. Essayez de reformuler votre question avec d'autres termes.",
+      "row_count": 0,
+      "error": null,
+      "blocked": false,
+      "verdict": "⚠️",
+      "issues": [
+        "Mots-clés manquants: ['FETCH FIRST 1']"
+      ],
+      "duration": 38.48197555541992
+    },
+    {
+      "tag": "C7",
+      "question": "Quel poste a fait le plus d'actions ce mois-ci ?",
+      "sql": "SELECT USERHOST, COUNT(*) AS NB FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE USERHOST IS NOT NULL AND TRUNC(EVENT_TIMESTAMP,'MM')=TRUNC(SYSDATE,'MM') GROUP BY USERHOST ORDER BY NB DESC FETCH FIRST 1 ROWS ONLY;",
+      "synthesis": "1 resultat trouve.",
+      "row_count": 1,
+      "error": null,
+      "blocked": false,
+      "verdict": "✅",
+      "issues": [],
+      "duration": 39.187044858932495
+    },
+    {
+      "tag": "C8",
+      "question": "Depuis quelle machine vient la majorité des connexions ?",
+      "sql": "SELECT USERHOST, COUNT(*) AS NB FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE ACTION_NAME='LOGON' AND USERHOST IS NOT NULL GROUP BY USERHOST ORDER BY NB DESC FETCH FIRST 1 ROWS ONLY;",
+      "synthesis": "1 resultat trouve.",
+      "row_count": 1,
+      "error": null,
+      "blocked": false,
+      "verdict": "✅",
+      "issues": [],
+      "duration": 36.28171992301941
+    },
+    {
+      "tag": "C9",
+      "question": "Liste les 3 machines les plus actives la semaine dernière.",
+      "sql": "SELECT USERHOST, COUNT(*) AS NB FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE USERHOST IS NOT NULL AND TRUNC(EVENT_TIMESTAMP)>=TRUNC(SYSDATE-3) GROUP BY USERHOST ORDER BY NB DESC FETCH FIRST 3 ROWS ONLY;",
+      "synthesis": "Aucune activite detectee pour cette demande. Essayez de reformuler votre question avec d'autres termes.",
+      "row_count": 0,
+      "error": null,
+      "blocked": false,
+      "verdict": "✅",
+      "issues": [],
+      "duration": 38.713411808013916
+    },
+    {
+      "tag": "D10",
+      "question": "Quelle table a été le plus modifiée cette semaine ?",
+      "sql": "SELECT OBJECT_NAME, COUNT(*) AS NB FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE ACTION_NAME IN ('INSERT','UPDATE','DELETE') AND OBJECT_NAME IS NOT NULL AND TRUNC(EVENT_TIMESTAMP)>=TRUNC(SYSDATE-7) GROUP BY OBJECT_NAME ORDER BY NB DESC FETCH FIRST 1 ROWS ONLY;",
+      "synthesis": "Aucune activite detectee pour cette demande. Essayez de reformuler votre question avec d'autres termes.",
+      "row_count": 0,
+      "error": null,
+      "blocked": false,
+      "verdict": "✅",
+      "issues": [],
+      "duration": 44.49451780319214
+    },
+    {
+      "tag": "D11",
+      "question": "Sur les 48 dernières heures, quels objets ont le plus changé ?",
+      "sql": "SELECT OBJECT_NAME, COUNT(*) AS NB FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE ACTION_NAME IN ('INSERT','UPDATE','DELETE') AND OBJECT_NAME IS NOT NULL AND EVENT_TIMESTAMP>=SYSDATE-48/24 ORDER BY NB DESC FETCH FIRST 1 ROWS ONLY;",
+      "synthesis": "Il n'y a pas eu de modification significative des objets sur les 48 dernières heures, selon les données disponibles. Il pourrait être utile de reformuler la demande en spécifiant davantage le contexte ou les critères de changement pour obtenir des informations pertinentes.",
+      "row_count": 0,
+      "error": "ORA-00937: not a single-group group function\nHelp: https://docs.oracle.com/error-help/db/ora-00937/",
+      "blocked": false,
+      "verdict": "❌",
+      "issues": [
+        "Erreur Oracle: ORA-00937: not a single-group group function\nHelp: https://docs.oracle.com/error",
+        "Mots-clés manquants: ['INTERVAL']"
+      ],
+      "duration": 52.37885928153992
+    },
+    {
+      "tag": "D12",
+      "question": "Quels sont les 3 objets les plus supprimés ce mois ?",
+      "sql": "SELECT OBJECT_NAME, COUNT(*) AS NB FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE ACTION_NAME='DROP' AND OBJECT_NAME IS NOT NULL AND TRUNC(EVENT_TIMESTAMP,'MM')=TRUNC(SYSDATE,'MM') GROUP BY OBJECT_NAME ORDER BY NB DESC FETCH FIRST 3 ROWS ONLY;",
+      "synthesis": "Aucune activite detectee pour cette demande. Essayez de reformuler votre question avec d'autres termes.",
+      "row_count": 0,
+      "error": null,
+      "blocked": false,
+      "verdict": "✅",
+      "issues": [],
+      "duration": 42.06586050987244
+    },
+    {
+      "tag": "E13",
+      "question": "Donne les actions des dernières 48 heures.",
+      "sql": "SELECT DBUSERNAME, ACTION_NAME, OBJECT_NAME, EVENT_TIMESTAMP FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE EVENT_TIMESTAMP>=SYSDATE-48/24 ORDER BY EVENT_TIMESTAMP DESC FETCH FIRST 10 ROWS ONLY;",
+      "synthesis": "Aucune activite detectee pour cette demande. Essayez de reformuler votre question avec d'autres termes.",
+      "row_count": 0,
+      "error": null,
+      "blocked": false,
+      "verdict": "✅",
+      "issues": [],
+      "duration": 36.245516300201416
+    },
+    {
+      "tag": "E14",
+      "question": "Quelle a été la toute dernière action enregistrée ?",
+      "sql": "SELECT DBUSERNAME, ACTION_NAME, OBJECT_NAME, EVENT_TIMESTAMP FROM SMART2DSECU.UNIFIED_AUDIT_DATA ORDER BY EVENT_TIMESTAMP DESC FETCH FIRST 1 ROWS ONLY;",
+      "synthesis": "1 resultat trouve. Action : creation de table. Utilisateur : SYSTEM. Objet : EMPLOYEES. Date : 2026-06-03.",
+      "row_count": 1,
+      "error": null,
+      "blocked": false,
+      "verdict": "✅",
+      "issues": [],
+      "duration": 35.15359902381897
+    },
+    {
+      "tag": "E15",
+      "question": "Combien d'événements entre 14h et 18h aujourd'hui ?",
+      "sql": "SELECT COUNT(*) AS NB FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE TO_NUMBER(TO_CHAR(EVENT_TIMESTAMP,'HH24'))>=14 AND TO_NUMBER(TO_CHAR(EVENT_TIMESTAMP,'HH24'))<18;",
+      "synthesis": "Le resultat est : 168.",
+      "row_count": 1,
+      "error": null,
+      "blocked": false,
+      "verdict": "⚠️",
+      "issues": [
+        "Mots-clés manquants: ['SYSDATE']"
+      ],
+      "duration": 37.06637907028198
+    },
+    {
+      "tag": "F16",
+      "question": "Y a-t-il eu des tentatives de connexion suspectes la nuit ?",
+      "sql": "SELECT DBUSERNAME, EVENT_TIMESTAMP FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE ACTION_NAME='LOGON' AND (TO_NUMBER(TO_CHAR(EVENT_TIMESTAMP,'HH24'))>=22 OR TO_NUMBER(TO_CHAR(EVENT_TIMESTAMP,'HH24'))<6) ORDER BY EVENT_TIMESTAMP DESC FETCH FIRST 10 ROWS ONLY;",
+      "synthesis": "Il y a eu des activités de connexion récentes avec le nom d'utilisateur PROD2_MDS et PROD2_STB, toutes à des moments précis de la nuit.\n\n- Utilisateur: PROD2_MDS, Timestamp: 2026-04-07 05:59:58.557006\n- Utilisateur: PROD2_STB, Timestamp: 2026-04-07 05:59:53.282794\n- Utilisateur: PROD2_MDS, Timestamp:",
+      "row_count": 10,
+      "error": null,
+      "blocked": false,
+      "verdict": "⚠️",
+      "issues": [
+        "Mots-clés manquants: ['EXTRACT']"
+      ],
+      "duration": 79.72531914710999
+    },
+    {
+      "tag": "F17",
+      "question": "Quels utilisateurs ont fait du LOGOFF juste après LOGON ?",
+      "sql": "SELECT DBUSERNAME, EVENT_TIMESTAMP FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE ACTION_NAME='LOGON' AND DBUSERNAME IS NOT NULL ORDER BY EVENT_TIMESTAMP DESC FETCH FIRST 1 ROWS ONLY;",
+      "synthesis": "1 resultat trouve. Utilisateur : SMART2DSECU. Date : 2026-06-03.",
+      "row_count": 1,
+      "error": null,
+      "blocked": false,
+      "verdict": "⚠️",
+      "issues": [
+        "Mots-clés manquants: ['LOGOFF']"
+      ],
+      "duration": 36.24508476257324
+    },
+    {
+      "tag": "F18",
+      "question": "Quels comptes ont reçu de nouveaux privilèges récemment ?",
+      "sql": "SELECT DBUSERNAME, COUNT(*) AS NB FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE ACTION_NAME='GRANT' AND USERHOST IS NOT NULL AND DBUSERNAME IS NOT NULL AND OBJECT_NAME IS NOT NULL AND TRUNC(EVENT_TIMESTAMP)>=TRUNC(SYSDATE-7) GROUP BY DBUSERNAME ORDER BY NB DESC;",
+      "synthesis": "Aucune activite detectee pour cette demande. Essayez de reformuler votre question avec d'autres termes.",
+      "row_count": 0,
+      "error": null,
+      "blocked": false,
+      "verdict": "✅",
+      "issues": [],
+      "duration": 40.730820655822754
+    },
+    {
+      "tag": "G19",
+      "question": "Combien d'utilisateurs distincts apparaissent dans les logs ?",
+      "sql": "SELECT COUNT(DISTINCT DBUSERNAME) AS NB_USERS FROM SMART2DSECU.UNIFIED_AUDIT_DATA;",
+      "synthesis": "Le resultat est : 17.",
+      "row_count": 1,
+      "error": null,
+      "blocked": false,
+      "verdict": "✅",
+      "issues": [],
+      "duration": 29.932714223861694
+    },
+    {
+      "tag": "G20",
+      "question": "Combien d'actions par utilisateur en moyenne sur le mois ?",
+      "sql": "SELECT COUNT(*) AS NB FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE USERNAME='USER1';",
+      "synthesis": "Il n'y a pas eu de détection d'activité concernant le nombre d'actions par utilisateur sur une période donnée. Il serait peut-être utile de reformuler la question pour obtenir des informations spécifiques, comme les types d'actions ou les périodes de temps spécifiques.",
+      "row_count": 0,
+      "error": "ORA-00904: \"USERNAME\": invalid identifier\nHelp: https://docs.oracle.com/error-help/db/ora-00904/",
+      "blocked": false,
+      "verdict": "❌",
+      "issues": [
+        "Erreur Oracle: ORA-00904: \"USERNAME\": invalid identifier\nHelp: https://docs.oracle.com/error-he",
+        "Mots-clés manquants: ['AVG', 'GROUP BY']"
+      ],
+      "duration": 41.05598449707031
+    }
+  ]
+}
