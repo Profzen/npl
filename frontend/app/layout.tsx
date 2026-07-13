@@ -9,7 +9,7 @@ const _geist = Geist({ subsets: ["latin"] });
 const _geistMono = Geist_Mono({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: 'ASKSMART - Questions-Réponses sur vos données Oracle',
+  title: 'AuditAI - Questions-Réponses sur vos données Oracle',
   description: 'Plateforme intelligente de questions-réponses sur vos données d\'audit Oracle',
   icons: {
     icon: [
@@ -32,7 +32,7 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="fr">
+    <html lang="fr" data-theme="slate">
       <body className="font-sans antialiased">
         <AuthProvider>
           {children}

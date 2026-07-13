@@ -627,7 +627,24 @@ def read_settings(_: dict = Depends(get_current_user)) -> RuntimeSettings:
 
 @app.post("/api/settings", response_model=RuntimeSettings)
 def write_settings(payload: RuntimeSettings, current_user: dict = Depends(get_current_user)) -> RuntimeSettings:
-    updated = update_runtime_settings(payload.model_dump())
+    payload_data = payload.model_dump()
+
+    # Les utilisateurs simples peuvent modifier les paramètres non sensibles,
+    # mais ne peuvent pas écraser la connexion Oracle côté API.
+    if not bool(current_user.get("is_admin")):
+        current_settings = get_runtime_settings()
+        for key in (
+            "oracle_user",
+            "oracle_password",
+            "oracle_host",
+            "oracle_port",
+            "oracle_service",
+            "oracle_table",
+        ):
+            if key in current_settings:
+                payload_data[key] = current_settings[key]
+
+    updated = update_runtime_settings(payload_data)
     write_audit_log(
         username=str(current_user["username"]),
         action="settings_update",
@@ -705,3 +722,4 @@ def query_progress(request_id: str, current_user: dict = Depends(get_current_use
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Acces refuse a ce suivi")
         payload["elapsed_seconds"] = max(0.0, time.perf_counter() - payload["started_at"])
         return _query_progress_response(payload)
+

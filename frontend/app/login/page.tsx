@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, type FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { Eye, EyeOff, Loader2 } from 'lucide-react'
@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useAuth } from '@/lib/auth-context'
 import { ApiError } from '@/lib/api'
-import { tStandalone, getStandaloneLang } from '@/lib/i18n'
+import { translate, getStandaloneLang, type Lang } from '@/lib/i18n'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -21,11 +21,16 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   // Re-render after mount so SSR fallback (fr) is replaced by client-resolved lang
-  const [, setLang] = useState<'fr' | 'en'>('fr')
-  useEffect(() => { setLang(getStandaloneLang()) }, [])
-  const t = tStandalone
+  // Important : le premier rendu client doit être identique au rendu serveur.
+  const [lang, setLang] = useState<Lang>('fr')
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  useEffect(() => {
+    setLang(getStandaloneLang())
+  }, [])
+
+  const t = (key: string) => translate(lang, key)
+
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
     setError(null)
     setIsLoading(true)
@@ -59,7 +64,7 @@ export default function LoginPage() {
             <Image src="/smart2d_logo.jpeg" alt="Smart2D" width="160" height="160" className="h-16 w-auto object-contain" priority />
           </div>
           <h1 className="text-3xl font-bold tracking-tight text-foreground">
-            ASKSMART
+            AuditAI
           </h1>
         </div>
 

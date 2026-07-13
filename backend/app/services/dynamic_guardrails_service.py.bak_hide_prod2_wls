@@ -1,0 +1,663 @@
+from __future__ import annotations
+
+import re
+import unicodedata
+from typing import Iterable
+
+from app.services.settings_service import get_fetch_limit, get_oracle_table
+
+# ---------------------------------------------------------------------------
+# Audit AI — garde-fous dynamiques, non rigides
+# ---------------------------------------------------------------------------
+# Ce module ne remplace PAS le modèle NLP.
+# Il ne contient pas de requêtes préfabriquées par question.
+# Il sert uniquement à :
+#   1) sécuriser la requête SQL générée par le modèle ;
+#   2) ajouter des filtres évidents quand la question les mentionne clairement
+#      et que le modèle les a oubliés ;
+#   3) masquer les objets/comptes techniques sans bloquer les nouveaux objets
+#      métier ou nouveaux utilisateurs.
+
+AUDIT_SCOPE_MARKER = "/* AUDITAI_DYNAMIC_GUARDRAILS_SCOPE */"
+
+AUDIT_ACTIONS = (
+    "SELECT", "INSERT", "UPDATE", "DELETE", "GRANT", "REVOKE", "ALTER",
+    "DROP", "CREATE", "TRUNCATE", "EXECUTE", "LOGON", "LOGOFF",
+)
+
+ACTION_SYNONYMS: dict[str, tuple[str, ...]] = {
+    "SELECT": ("SELECT", "LECTURE", "LIRE", "LU", "CONSULTE", "CONSULTATION", "AFFICHE", "VOIR"),
+    "INSERT": ("INSERT", "INSERTION", "AJOUT", "AJOUTE", "AJOUTER", "CREE LIGNE", "CREATION LIGNE"),
+    "UPDATE": ("UPDATE", "MODIFICATION", "MODIFIE", "MODIFIER", "MIS A JOUR", "MISE A JOUR", "CHANGE"),
+    "DELETE": ("DELETE", "SUPPRESSION", "SUPPRIME", "SUPPRIMER", "EFFACE"),
+    "GRANT": ("GRANT", "PRIVILEGE", "PRIVILEGES", "ATTRIBUE", "DONNE DROIT"),
+    "REVOKE": ("REVOKE", "RETIRE PRIVILEGE", "RETIRE DROIT", "REVOQUE"),
+    "ALTER": ("ALTER", "STRUCTURE", "MODIFIE STRUCTURE", "CHANGE STRUCTURE"),
+    "DROP": ("DROP", "SUPPRIME TABLE", "SUPPRIME OBJET"),
+    "CREATE": ("CREATE", "CREATION", "CREE", "CREER", "NOUVEL OBJET", "NOUVELLE TABLE"),
+    "TRUNCATE": ("TRUNCATE", "VIDER", "VIDAGE"),
+    "EXECUTE": ("EXECUTE", "EXECUTION", "PROCEDURE", "FONCTION"),
+    "LOGON": ("LOGON", "CONNEXION", "CONNECTE", "CONNECTER"),
+    "LOGOFF": ("LOGOFF", "DECONNEXION", "DECONNECTE", "DECONNECTER"),
+}
+
+# Objets techniques / de test à masquer.
+# Les nouvelles tables métier restent visibles automatiquement si elles ne
+# correspondent pas à ces noms ou motifs.
+HIDDEN_AUDIT_OBJECTS_EXACT = (
+    "AUD$",
+    "DEVICE_ADDRESS",
+    "SMA_MIGRATION_17_TEST",
+    "PROD1_UMS",
+    "MGMT_VIEW",
+    "USER_DEVICE",
+    "COMPONENT_SCHEMA_INFO",
+    "ADD_JOB_HISTORY",
+    "SYSMAN",
+    "COMP_PROFILE_TEST",
+    "VROMUALD",
+    "TEST",
+)
+
+HIDDEN_AUDIT_OBJECT_LIKE = (
+    "SCHEMA_VERSION_REGIST%",
+    "TEST%",
+    "%VROMUALD%",
+    "%ROMUALD%",
+    "BIN$%",
+    "SYS_EXPORT%",
+)
+
+# Comptes techniques / bruités à masquer de la colonne Utilisateurs.
+# Les nouveaux utilisateurs Oracle non listés ici apparaissent automatiquement
+# dès qu'ils sont présents dans SMART2DSECU.UNIFIED_AUDIT_DATA.
+HIDDEN_AUDIT_USERS_EXACT = (
+    "PROD2_MDS",
+    "PROD2_STB",
+    "TEST",
+    "SMART2DADMIN",
+    "BATCH_USER",
+    "SMART2DADMINI",
+    "SMART2DSECU",
+    "\\SMART2DADMIN",
+)
+
+# Ceux-ci restent visibles même si on ajoute plus tard des règles générales.
+PINNED_AUDIT_USERS = (
+    "VROMUALD",
+    "SYS",
+    "SYSTEM",
+    "CYRILLE",
+    "ITEST",
+    "CYRILLE_TBS",
+)
+
+STOPWORDS = {
+    "UN", "UNE", "LE", "LA", "LES", "L", "DES", "DE", "DU", "D", "PAR", "SUR",
+    "TABLE", "OBJET", "BASE", "ACTION", "ACTIONS", "UTILISATEUR", "USER", "USERS",
+    "QUI", "QUE", "QUEL", "QUELLE", "QUELS", "QUELLES", "EST", "CE", "FAIT", "FAIRE",
+    "HIER", "AUJOURD", "AUJOURDHUI", "AVANT", "DERNIER", "DERNIERE", "PASSEE", "PASSE",
+    "MOIS", "AN", "ANS", "JOUR", "JOURS", "SEMAINE", "NUIT", "DANS",
+}
+
+WEEKDAY_OFFSETS = {
+    "LUNDI": 0,
+    "MARDI": 1,
+    "MERCREDI": 2,
+    "JEUDI": 3,
+    "VENDREDI": 4,
+    "SAMEDI": 5,
+    "DIMANCHE": 6,
+}
+
+NUMBER_WORDS = {
+    "UN": 1, "UNE": 1, "DEUX": 2, "TROIS": 3, "QUATRE": 4, "CINQ": 5,
+    "SIX": 6, "SEPT": 7, "HUIT": 8, "NEUF": 9, "DIX": 10,
+    "ONZE": 11, "DOUZE": 12,
+}
+
+
+def _strip_accents(value: str) -> str:
+    return "".join(
+        char for char in unicodedata.normalize("NFKD", value or "")
+        if not unicodedata.combining(char)
+    )
+
+
+def normalize_text(value: str) -> str:
+    text = _strip_accents(value or "").upper()
+    text = text.replace("’", "'")
+    text = re.sub(r"[^A-Z0-9_\\$#.' -]+", " ", text)
+    text = re.sub(r"\s+", " ", text).strip()
+    return text
+
+
+def _sql_list(values: Iterable[str]) -> str:
+    return ", ".join("'" + str(item).replace("'", "''").upper() + "'" for item in values)
+
+
+def get_hidden_objects_condition(column: str = "OBJECT_NAME") -> str:
+    clauses: list[str] = [f"{column} IS NOT NULL"]
+    if HIDDEN_AUDIT_OBJECTS_EXACT:
+        clauses.append(f"UPPER({column}) NOT IN ({_sql_list(HIDDEN_AUDIT_OBJECTS_EXACT)})")
+    for pattern in HIDDEN_AUDIT_OBJECT_LIKE:
+        safe_pattern = pattern.replace("'", "''").upper()
+        clauses.append(f"UPPER({column}) NOT LIKE '{safe_pattern}'")
+    return " AND ".join(clauses)
+
+
+def get_visible_users_condition(column: str = "DBUSERNAME") -> str:
+    clauses = [f"{column} IS NOT NULL"]
+    if HIDDEN_AUDIT_USERS_EXACT:
+        clauses.append(
+            f"(UPPER({column}) IN ({_sql_list(PINNED_AUDIT_USERS)}) "
+            f"OR UPPER({column}) NOT IN ({_sql_list(HIDDEN_AUDIT_USERS_EXACT)}))"
+        )
+    return " AND ".join(clauses)
+
+
+def strip_sql_comments(sql: str) -> str:
+    text = re.sub(r"--.*?$", "", sql or "", flags=re.MULTILINE)
+    text = re.sub(r"/\*.*?\*/", "", text, flags=re.DOTALL)
+    return text
+
+
+def _without_string_literals(sql: str) -> str:
+    # ACTION_NAME='DELETE' ou ACTION_NAME='CREATE' sont des valeurs d'audit,
+    # pas des instructions SQL exécutées. On retire donc les chaînes avant de
+    # chercher les mots-clés dangereux.
+    return re.sub(r"'(?:''|[^'])*'", "''", sql or "")
+
+
+def validate_readonly_audit_sql(sql: str) -> tuple[bool, str]:
+    cleaned = strip_sql_comments(sql).strip().rstrip(";").strip()
+    if not cleaned:
+        return False, "Requête SQL vide."
+
+    upper = cleaned.upper()
+    upper_no_strings = _without_string_literals(upper)
+
+    if not upper.startswith(("SELECT", "WITH")):
+        return False, "Seules les requêtes SELECT/WITH sont autorisées."
+
+    if ";" in cleaned:
+        return False, "Une seule requête SQL est autorisée."
+
+    forbidden = r"\b(INSERT|UPDATE|DELETE|MERGE|DROP|ALTER|CREATE|TRUNCATE|GRANT|REVOKE|COMMIT|ROLLBACK|EXECUTE|BEGIN|DECLARE)\b"
+    if re.search(forbidden, upper_no_strings):
+        return False, "Mot-clé SQL interdit détecté."
+
+    oracle_table = get_oracle_table().upper()
+    if oracle_table not in upper and "ORACLE_AUDIT_TRAIL" not in upper and AUDIT_SCOPE_MARKER.upper() not in upper:
+        return False, "La requête doit interroger uniquement la table d'audit configurée."
+
+    blocked_sources = r"\b(DBA_|ALL_|V\$|GV\$|SYS\.|SYSTEM\.)"
+    if re.search(blocked_sources, upper):
+        return False, "Vue système ou schéma interdit détecté."
+
+    return True, "OK"
+
+
+def is_question_cacheable(question: str) -> bool:
+    q = normalize_text(question)
+    # Les questions temporelles ou de dernière activité doivent toujours relire Oracle.
+    time_terms = (
+        "DERNIER", "DERNIERE", "RECENT", "RECENTE", "AUJOURD", "HIER", "AVANT HIER",
+        "SEMAINE", "MOIS", "AN ", "ANS", "JOUR", "JOURS", "NUIT", "MATIN", "SOIR",
+        "LUNDI", "MARDI", "MERCREDI", "JEUDI", "VENDREDI", "SAMEDI", "DIMANCHE",
+        "DERNIERS", "DERNIERES", "PASSE", "PASSEE",
+    )
+    return not any(term in q for term in time_terms)
+
+
+def _safe_identifier(token: str | None) -> str | None:
+    if not token:
+        return None
+    token = token.strip().strip("'\"`.,;:!?()[]{}")
+    token = _strip_accents(token).upper()
+    if not re.fullmatch(r"[A-Z0-9_\\$#.-]{2,80}", token):
+        return None
+    if token in STOPWORDS:
+        return None
+    return token
+
+
+def _contains_name(question_norm: str, name: str) -> bool:
+    candidate = normalize_text(name)
+    if not candidate:
+        return False
+    # Délimiteurs adaptés aux noms Oracle avec _, $, #, \\.
+    return re.search(rf"(?<![A-Z0-9_\\$#]){re.escape(candidate)}(?![A-Z0-9_\\$#])", question_norm) is not None
+
+
+def _detect_from_catalog(question: str, known_values: Iterable[str]) -> list[str]:
+    q = normalize_text(question)
+    values = sorted({str(v) for v in known_values if v}, key=len, reverse=True)
+    found: list[str] = []
+    for value in values:
+        safe = _safe_identifier(value)
+        if safe and _contains_name(q, safe):
+            found.append(safe)
+    return found
+
+
+def _detect_user_fallback(question: str) -> str | None:
+    q = normalize_text(question)
+    patterns = (
+        r"\bUTILISATEUR\s+([A-Z0-9_\\$#.-]{2,80})\b",
+        r"\bUSER\s+([A-Z0-9_\\$#.-]{2,80})\b",
+        r"\bPAR\s+L?\s*'?UTILISATEUR\s+([A-Z0-9_\\$#.-]{2,80})\b",
+        r"\bPAR\s+([A-Z0-9_\\$#.-]{2,80})\b",
+        r"\bDE\s+L?\s*'?UTILISATEUR\s+([A-Z0-9_\\$#.-]{2,80})\b",
+    )
+    for pattern in patterns:
+        m = re.search(pattern, q)
+        if m:
+            return _safe_identifier(m.group(1))
+    return None
+
+
+def _detect_object_fallback(question: str) -> str | None:
+    q = normalize_text(question)
+    patterns = (
+        r"\bTABLE\s+([A-Z0-9_\\$#.-]{2,80})\b",
+        r"\bOBJET\s+([A-Z0-9_\\$#.-]{2,80})\b",
+        r"\bSUR\s+LA\s+TABLE\s+([A-Z0-9_\\$#.-]{2,80})\b",
+        r"\bSUR\s+([A-Z0-9_\\$#.-]{2,80})\b",
+    )
+    for pattern in patterns:
+        m = re.search(pattern, q)
+        if m:
+            return _safe_identifier(m.group(1))
+    return None
+
+
+def detect_question_users(question: str, known_users: Iterable[str] | None = None) -> list[str]:
+    found = _detect_from_catalog(question, known_users or [])
+    if found:
+        return found[:3]
+    fallback = _detect_user_fallback(question)
+    return [fallback] if fallback else []
+
+
+def detect_question_objects(question: str, known_objects: Iterable[str] | None = None) -> list[str]:
+    found = _detect_from_catalog(question, known_objects or [])
+    if found:
+        return found[:3]
+    fallback = _detect_object_fallback(question)
+    return [fallback] if fallback else []
+
+
+def detect_question_actions(question: str) -> list[str]:
+    q = normalize_text(question)
+    found: list[str] = []
+    for action in AUDIT_ACTIONS:
+        if _contains_name(q, action):
+            found.append(action)
+            continue
+        for synonym in ACTION_SYNONYMS.get(action, ()):  # synonymes génériques, pas questions préfaites
+            if _contains_name(q, synonym):
+                found.append(action)
+                break
+    # Éviter de transformer "créé en base" etc. en CREATE si une autre action explicite est présente.
+    return list(dict.fromkeys(found))[:3]
+
+
+def _number_after(pattern: str, q: str) -> int | None:
+    m = re.search(pattern, q)
+    if not m:
+        return None
+    raw = m.group(1).upper()
+    if raw.isdigit():
+        return max(1, min(365, int(raw)))
+    return NUMBER_WORDS.get(raw)
+
+
+def detect_time_condition(question: str) -> str | None:
+    q = normalize_text(question)
+    night = "NUIT" in q or "NOCTURNE" in q
+    night_clause = "TO_NUMBER(TO_CHAR(EVENT_TIMESTAMP, 'HH24')) BETWEEN 0 AND 5"
+
+    if "AVANT HIER" in q or "AVANT-HIER" in q:
+        day_clause = "EVENT_TIMESTAMP >= TRUNC(SYSDATE) - 2 AND EVENT_TIMESTAMP < TRUNC(SYSDATE) - 1"
+        return f"{day_clause} AND {night_clause}" if night else day_clause
+
+    if "HIER" in q:
+        day_clause = "EVENT_TIMESTAMP >= TRUNC(SYSDATE) - 1 AND EVENT_TIMESTAMP < TRUNC(SYSDATE)"
+        return f"{day_clause} AND {night_clause}" if night else day_clause
+
+    if "AUJOURD" in q or "AUJOURDHUI" in q:
+        day_clause = "EVENT_TIMESTAMP >= TRUNC(SYSDATE) AND EVENT_TIMESTAMP < TRUNC(SYSDATE) + 1"
+        return f"{day_clause} AND {night_clause}" if night else day_clause
+
+    if "MOIS DERNIER" in q:
+        return "EVENT_TIMESTAMP >= ADD_MONTHS(TRUNC(SYSDATE, 'MM'), -1) AND EVENT_TIMESTAMP < TRUNC(SYSDATE, 'MM')"
+
+    if "CE MOIS" in q or "MOIS EN COURS" in q:
+        return "EVENT_TIMESTAMP >= TRUNC(SYSDATE, 'MM') AND EVENT_TIMESTAMP < ADD_MONTHS(TRUNC(SYSDATE, 'MM'), 1)"
+
+    if "AN DERNIER" in q or "ANNEE DERNIERE" in q:
+        return "EVENT_TIMESTAMP >= ADD_MONTHS(TRUNC(SYSDATE, 'YYYY'), -12) AND EVENT_TIMESTAMP < TRUNC(SYSDATE, 'YYYY')"
+
+    if "CETTE ANNEE" in q or "ANNEE EN COURS" in q:
+        return "EVENT_TIMESTAMP >= TRUNC(SYSDATE, 'YYYY') AND EVENT_TIMESTAMP < ADD_MONTHS(TRUNC(SYSDATE, 'YYYY'), 12)"
+
+    n = _number_after(r"(?:CES|LES)\s+([0-9]+|UN|UNE|DEUX|TROIS|QUATRE|CINQ|SIX|SEPT|HUIT|NEUF|DIX|ONZE|DOUZE)\s+DERNIERS?\s+JOURS?", q)
+    if n:
+        return f"EVENT_TIMESTAMP >= SYSDATE - {n}"
+
+    n = _number_after(r"IL\s+Y\s+A\s+([0-9]+|UN|UNE|DEUX|TROIS|QUATRE|CINQ|SIX|SEPT|HUIT|NEUF|DIX|ONZE|DOUZE)\s+JOURS?", q)
+    if n:
+        return f"EVENT_TIMESTAMP >= TRUNC(SYSDATE) - {n} AND EVENT_TIMESTAMP < TRUNC(SYSDATE) - {n - 1}"
+
+    n = _number_after(r"IL\s+Y\s+A\s+([0-9]+|UN|UNE|DEUX|TROIS|QUATRE|CINQ|SIX|SEPT|HUIT|NEUF|DIX|ONZE|DOUZE)\s+MOIS", q)
+    if n:
+        return f"EVENT_TIMESTAMP >= ADD_MONTHS(TRUNC(SYSDATE, 'MM'), -{n}) AND EVENT_TIMESTAMP < ADD_MONTHS(TRUNC(SYSDATE, 'MM'), -{n - 1})"
+
+    for day, offset in WEEKDAY_OFFSETS.items():
+        if f"{day} PASSE" in q or f"{day} DERNIER" in q:
+            return f"EVENT_TIMESTAMP >= TRUNC(SYSDATE, 'IW') - 7 + {offset} AND EVENT_TIMESTAMP < TRUNC(SYSDATE, 'IW') - 7 + {offset + 1}"
+
+    # La nuit est un filtre horaire. Si la question dit aussi hier/avant-hier,
+    # les branches ci-dessus auront déjà ajouté la journée. Le modèle peut aussi
+    # générer la date, ici on ajoute seulement le créneau horaire si nécessaire.
+    if "NUIT" in q or "NOCTURNE" in q:
+        return "TO_NUMBER(TO_CHAR(EVENT_TIMESTAMP, 'HH24')) BETWEEN 0 AND 5"
+
+    return None
+
+
+def _has_filter(sql: str, column: str) -> bool:
+    return re.search(rf"\b{re.escape(column)}\b\s*(=|IN|LIKE|BETWEEN|>=|<=|>|<)", sql, flags=re.IGNORECASE) is not None
+
+
+def _has_event_timestamp_filter(sql: str) -> bool:
+    return _has_filter(sql, "EVENT_TIMESTAMP") or "TO_CHAR(EVENT_TIMESTAMP" in sql.upper()
+
+
+def _has_order_by(sql: str) -> bool:
+    return re.search(r"\bORDER\s+BY\b", sql, flags=re.IGNORECASE) is not None
+
+
+def _has_fetch(sql: str) -> bool:
+    return re.search(r"\bFETCH\s+FIRST\b", sql, flags=re.IGNORECASE) is not None
+
+
+def _is_aggregation(sql: str) -> bool:
+    return bool(re.search(r"\b(COUNT|SUM|AVG|MIN|MAX)\s*\(", sql, flags=re.IGNORECASE) or re.search(r"\bGROUP\s+BY\b", sql, flags=re.IGNORECASE))
+
+
+def _add_final_order_fetch_if_needed(sql: str, question: str) -> str:
+    q = normalize_text(question)
+    wants_last = any(term in q for term in ("DERNIERE", "DERNIER", "PLUS RECENT", "PLUS RECENTE", "RECENT", "RECENTE"))
+    if not wants_last or _is_aggregation(sql):
+        return sql
+
+    sql_no_sc = sql.rstrip().rstrip(";").rstrip()
+    if not _has_order_by(sql_no_sc):
+        if _has_fetch(sql_no_sc):
+            sql_no_sc = re.sub(r"\bFETCH\s+FIRST\b", "ORDER BY EVENT_TIMESTAMP DESC FETCH FIRST", sql_no_sc, count=1, flags=re.IGNORECASE)
+        else:
+            sql_no_sc = f"{sql_no_sc} ORDER BY EVENT_TIMESTAMP DESC"
+    if not _has_fetch(sql_no_sc):
+        sql_no_sc = f"{sql_no_sc} FETCH FIRST 1 ROWS ONLY"
+    return sql_no_sc
+
+
+def _remove_legacy_scopes(sql: str) -> str:
+    table = re.escape(get_oracle_table().strip())
+    # Retire les anciens scopes générés par les scripts précédents pour repartir
+    # d'une base propre et éviter des filtres incohérents empilés.
+    marker = r"/\*\s*AUDITAI_[A-Z_]+_SCOPE\s*\*/"
+    pattern = rf"\bFROM\s+\(\s*SELECT\s+\*\s+FROM\s+{table}\s+WHERE\s+.*?\)\s*{marker}"
+    return re.sub(pattern, f"FROM {get_oracle_table().strip()}", sql, count=1, flags=re.IGNORECASE | re.DOTALL)
+
+
+def _build_question_filters(
+    question: str | None,
+    sql: str,
+    known_users: Iterable[str] | None = None,
+    known_objects: Iterable[str] | None = None,
+) -> list[str]:
+    """Construit uniquement des filtres explicites issus de la question.
+
+    Point important : on ne filtre plus globalement OBJECT_NAME ici.
+    Les filtres de tables masquées servent à l'affichage de la colonne Tables,
+    pas à supprimer des lignes dans les vraies questions utilisateur.
+
+    Exemple : "dernière action de SYSTEM" doit chercher toutes les actions de
+    SYSTEM, même si OBJECT_NAME est NULL ou correspond à une table masquée de
+    l'interface. Sinon on obtient de faux "aucun résultat".
+    """
+    filters: list[str] = []
+
+    if not question:
+        return filters
+
+    normalized_sql = _normalize_audit_column_aliases_v2(sql) if "_normalize_audit_column_aliases_v2" in globals() else sql
+
+    users = detect_question_users(question, known_users)
+    if users and not _has_filter(normalized_sql, "DBUSERNAME"):
+        filters.append("UPPER(DBUSERNAME) IN (" + _sql_list(users) + ")")
+
+    # On ne détecte une table/objet que si la question parle clairement d'une table/objet.
+    objects = detect_question_objects(question, known_objects)
+    user_set = {u.upper() for u in users}
+    objects = [obj for obj in objects if obj.upper() not in user_set]
+    if objects and not _has_filter(normalized_sql, "OBJECT_NAME"):
+        filters.append("UPPER(OBJECT_NAME) IN (" + _sql_list(objects) + ")")
+
+    actions = detect_question_actions(question)
+    if actions and not _has_filter(normalized_sql, "ACTION_NAME"):
+        filters.append("UPPER(ACTION_NAME) IN (" + _sql_list(actions) + ")")
+
+    time_condition = detect_time_condition(question)
+    if time_condition and not _has_event_timestamp_filter(normalized_sql):
+        filters.append(time_condition)
+    elif time_condition and ("TO_NUMBER(TO_CHAR(EVENT_TIMESTAMP" in time_condition and "TO_CHAR(EVENT_TIMESTAMP" not in normalized_sql.upper()):
+        filters.append(time_condition)
+
+    return filters
+
+def apply_base_scope(sql: str, filters: list[str]) -> str:
+    sql = (sql or "").strip().rstrip(";").strip()
+    sql = re.sub(r"\bORACLE_AUDIT_TRAIL\b", get_oracle_table().strip(), sql, flags=re.IGNORECASE)
+    sql = _remove_legacy_scopes(sql)
+
+    # Si aucun filtre explicite n'est nécessaire, on ne wrappe pas la table.
+    # Cela évite un faux filtrage global des lignes d'audit.
+    clean_filters = [clause for clause in filters if clause]
+    if not clean_filters:
+        return sql
+
+    table = get_oracle_table().strip()
+    where_clause = " AND ".join(f"({clause})" for clause in clean_filters)
+    scoped_source = f"(SELECT * FROM {table} WHERE {where_clause}) {AUDIT_SCOPE_MARKER}"
+    pattern = rf"\bFROM\s+{re.escape(table)}\b"
+
+    if re.search(pattern, sql, flags=re.IGNORECASE):
+        return re.sub(pattern, f"FROM {scoped_source}", sql, count=1, flags=re.IGNORECASE)
+
+    return sql
+
+def prepare_sql_for_execution(
+    sql: str,
+    question: str | None = None,
+    known_users: Iterable[str] | None = None,
+    known_objects: Iterable[str] | None = None,
+) -> str:
+    """
+    Prépare le SQL généré par le modèle sans le remplacer par une requête codée.
+    Le modèle reste la source principale ; ce module ajoute seulement un scope de
+    sécurité et les filtres évidents manquants.
+    """
+    prepared = (sql or "").strip().rstrip(";").strip()
+    if not prepared:
+        return prepared
+
+    filters = _build_question_filters(question, prepared, known_users, known_objects)
+    prepared = apply_base_scope(prepared, filters)
+    if question:
+        prepared = _add_final_order_fetch_if_needed(prepared, question)
+
+    if not _has_fetch(prepared) and not _is_aggregation(prepared):
+        prepared = f"{prepared.rstrip()} FETCH FIRST {max(1, int(get_fetch_limit()))} ROWS ONLY"
+
+    return prepared.rstrip().rstrip(";") + ";"
+
+
+def sanitize_runtime_settings_for_user(settings_payload: dict, is_admin: bool) -> dict:
+    data = dict(settings_payload)
+    data["interface_lang"] = "fr"
+    if not is_admin:
+        # Ne pas exposer la connexion Oracle aux utilisateurs simples.
+        for key in ("oracle_user", "oracle_password", "oracle_host", "oracle_port", "oracle_service", "oracle_table"):
+            if key in data:
+                data[key] = "" if key != "oracle_port" else 0
+    return data
+
+
+def merge_settings_for_role(incoming: dict, current: dict, is_admin: bool) -> dict:
+    merged = dict(current)
+    allowed_common = {"max_results", "session_duration", "logs_retention"}
+    allowed_admin = allowed_common | {"oracle_user", "oracle_password", "oracle_host", "oracle_port", "oracle_service", "oracle_table"}
+    allowed = allowed_admin if is_admin else allowed_common
+
+    for key in allowed:
+        if key in incoming:
+            merged[key] = incoming[key]
+
+    # L'anglais est désactivé fonctionnellement, même si une ancienne valeur "en"
+    # existe encore en localStorage ou dans un ancien payload.
+    merged["interface_lang"] = "fr"
+    return merged
+
+# ---------------------------------------------------------------------------
+# Audit AI — correctifs dynamiques v2
+# ---------------------------------------------------------------------------
+# Ces définitions remplacent volontairement les versions précédentes du module.
+# Python utilise les dernières fonctions définies dans le fichier.
+# Objectif : éviter les faux filtres, notamment SYSTEM détecté à tort comme
+# OBJECT_NAME, et normaliser USERNAME vers DBUSERNAME.
+
+
+def _question_has_object_intent_v2(question: str | None) -> bool:
+    q = normalize_text(question or "")
+    object_terms = (
+        "TABLE", "OBJET", "OBJECT", "SUR LA TABLE", "SUR L OBJET",
+        "TOUCHE A LA TABLE", "TOUCHER LA TABLE", "CONSULTE LA TABLE",
+        "MODIFIE LA TABLE", "SUPPRIME LA TABLE", "BASE SUR", "DANS LA TABLE",
+    )
+    return any(term in q for term in object_terms)
+
+
+def _question_has_user_intent_v2(question: str | None) -> bool:
+    q = normalize_text(question or "")
+    user_terms = (
+        "UTILISATEUR", "USER", "PAR ", "PAR L UTILISATEUR", "DE L UTILISATEUR",
+        "AUTEUR", "COMPTE", "DBUSERNAME",
+    )
+    return any(term in q for term in user_terms)
+
+
+def _normalize_audit_column_aliases_v2(sql: str) -> str:
+    """Corrige les alias de colonnes fréquents produits par le modèle.
+
+    Dans UNIFIED_AUDIT_DATA, la colonne utilisateur est DBUSERNAME.
+    Le modèle génère parfois USERNAME='SYSTEM'. On normalise vers DBUSERNAME.
+    """
+    fixed = sql or ""
+    # Remplacer USERNAME seulement comme identifiant SQL isolé, pas DBUSERNAME.
+    fixed = re.sub(r"(?<![A-Z0-9_])USERNAME(?![A-Z0-9_])", "DBUSERNAME", fixed, flags=re.IGNORECASE)
+    fixed = re.sub(r"(?<![A-Z0-9_])USER_NAME(?![A-Z0-9_])", "DBUSERNAME", fixed, flags=re.IGNORECASE)
+    fixed = re.sub(r"(?<![A-Z0-9_])OBJECT(?![A-Z0-9_])", "OBJECT_NAME", fixed, flags=re.IGNORECASE)
+    fixed = re.sub(r"(?<![A-Z0-9_])ACTION(?![A-Z0-9_])", "ACTION_NAME", fixed, flags=re.IGNORECASE)
+    return fixed
+
+
+def detect_question_objects(question: str, known_objects: Iterable[str] | None = None) -> list[str]:
+    """Détection volontairement prudente des objets.
+
+    Avant, on cherchait aveuglément tous les noms du catalogue dans la question.
+    Si OBJECT_NAME contenait SYSTEM, la phrase "utilisateur SYSTEM" ajoutait
+    par erreur OBJECT_NAME='SYSTEM'. Maintenant, on ne détecte un objet que si
+    la question parle clairement d'une table/objet.
+    """
+    if not _question_has_object_intent_v2(question):
+        return []
+    found = _detect_from_catalog(question, known_objects or [])
+    if found:
+        return found[:3]
+    fallback = _detect_object_fallback(question)
+    return [fallback] if fallback else []
+
+
+def _build_question_filters(
+    question: str | None,
+    sql: str,
+    known_users: Iterable[str] | None = None,
+    known_objects: Iterable[str] | None = None,
+) -> list[str]:
+    """Construit les filtres de contrôle sans rendre le système rigide."""
+    filters: list[str] = [get_hidden_objects_condition("OBJECT_NAME")]
+
+    if not question:
+        return filters
+
+    normalized_sql = _normalize_audit_column_aliases_v2(sql)
+
+    users = detect_question_users(question, known_users)
+    if users and not _has_filter(normalized_sql, "DBUSERNAME"):
+        filters.append("UPPER(DBUSERNAME) IN (" + _sql_list(users) + ")")
+
+    # On ne cherche les objets que si la question contient une intention objet/table.
+    objects = detect_question_objects(question, known_objects)
+    # Évite aussi les doublons absurdes : un mot déjà détecté comme utilisateur ne doit pas devenir objet.
+    user_set = {u.upper() for u in users}
+    objects = [obj for obj in objects if obj.upper() not in user_set]
+    if objects and not _has_filter(normalized_sql, "OBJECT_NAME"):
+        filters.append("UPPER(OBJECT_NAME) IN (" + _sql_list(objects) + ")")
+
+    actions = detect_question_actions(question)
+    if actions and not _has_filter(normalized_sql, "ACTION_NAME"):
+        filters.append("UPPER(ACTION_NAME) IN (" + _sql_list(actions) + ")")
+
+    time_condition = detect_time_condition(question)
+    if time_condition and not _has_event_timestamp_filter(normalized_sql):
+        filters.append(time_condition)
+    elif time_condition and ("TO_NUMBER(TO_CHAR(EVENT_TIMESTAMP" in time_condition and "TO_CHAR(EVENT_TIMESTAMP" not in normalized_sql.upper()):
+        filters.append(time_condition)
+
+    return filters
+
+
+def prepare_sql_for_execution(
+    sql: str,
+    question: str | None = None,
+    known_users: Iterable[str] | None = None,
+    known_objects: Iterable[str] | None = None,
+) -> str:
+    """Prépare le SQL généré par le modèle sans le remplacer.
+
+    Le modèle reste la source principale. Ce correctif :
+    - normalise USERNAME -> DBUSERNAME ;
+    - ajoute uniquement les contraintes évidentes absentes ;
+    - évite de confondre SYSTEM utilisateur avec SYSTEM objet ;
+    - applique le scope dynamique des objets masqués.
+    """
+    prepared = (sql or "").strip().rstrip(";").strip()
+    if not prepared:
+        return prepared
+
+    prepared = _normalize_audit_column_aliases_v2(prepared)
+
+    filters = _build_question_filters(question, prepared, known_users, known_objects)
+    prepared = apply_base_scope(prepared, filters)
+    if question:
+        prepared = _add_final_order_fetch_if_needed(prepared, question)
+
+    if not _has_fetch(prepared) and not _is_aggregation(prepared):
+        prepared = f"{prepared.rstrip()} FETCH FIRST {max(1, int(get_fetch_limit()))} ROWS ONLY"
+
+    return prepared.rstrip().rstrip(";") + ";"
+

@@ -460,6 +460,7 @@ export default function HomePage() {
                         </div>
                         <div className="min-w-0">
                           <span className="text-foreground font-semibold">{t('dashboard.users_title')}</span>
+                          <p className="text-xs font-normal text-muted-foreground">{t('dashboard.users_subtitle')}</p>
                         </div>
                       </div>
                       <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setShowUsersColumn(false)} title={t('dashboard.hide_column')}>
@@ -504,6 +505,7 @@ export default function HomePage() {
                         </div>
                         <div className="min-w-0">
                           <span className="text-foreground font-semibold">{t('dashboard.tables_title')}</span>
+                          <p className="text-xs font-normal text-muted-foreground">{t('dashboard.tables_subtitle')}</p>
                         </div>
                       </div>
                       <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setShowTablesColumn(false)} title={t('dashboard.hide_column')}>

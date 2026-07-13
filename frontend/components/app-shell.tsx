@@ -84,10 +84,10 @@ export function AppShell({ children }: AppShellProps) {
   const refreshSettings = useCallback(async () => {
     try {
       const data = await getSettings()
-      setSettings(data)
+      setSettings({ ...data, interface_lang: 'fr' })
       try {
         if (typeof window !== 'undefined' && (data.interface_lang === 'fr' || data.interface_lang === 'en')) {
-          window.localStorage.setItem('asksmart_lang', data.interface_lang)
+          window.localStorage.setItem('auditai_lang', 'fr')
         }
       } catch {
         /* ignore */
@@ -127,7 +127,7 @@ export function AppShell({ children }: AppShellProps) {
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-4">
           <Spinner className="w-8 h-8 text-primary" />
-          <p className="text-sm text-muted-foreground">{translate((settings?.interface_lang as 'fr' | 'en') || 'fr', 'app.loading')}</p>
+          <p className="text-sm text-muted-foreground">{translate('fr', 'app.loading')}</p>
         </div>
       </div>
     )
@@ -139,7 +139,7 @@ export function AppShell({ children }: AppShellProps) {
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-4">
           <Spinner className="w-8 h-8 text-primary" />
-          <p className="text-sm text-muted-foreground">{translate((settings?.interface_lang as 'fr' | 'en') || 'fr', 'app.loading')}</p>
+          <p className="text-sm text-muted-foreground">{translate('fr', 'app.loading')}</p>
         </div>
       </div>
     )

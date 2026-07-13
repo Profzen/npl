@@ -133,7 +133,7 @@ export function AppSidebar({
           </SidebarTrigger>
           {!isCollapsed && (
             <div className="flex items-center gap-2 overflow-hidden">
-              <span className="font-semibold text-sm tracking-tight truncate">ASKSMART</span>
+              <span className="font-bold text-2xl tracking-tight truncate text-white">Audit AI</span>
             </div>
           )}
         </div>
@@ -150,7 +150,7 @@ export function AppSidebar({
                     isActive={pathname === item.href}
                     tooltip={item.title}
                   >
-                    <Link href={item.href}>
+                    <Link href={item.href} className="font-semibold text-white">
                       <item.icon className="w-4 h-4" />
                       <span>{item.title}</span>
                     </Link>
@@ -165,7 +165,7 @@ export function AppSidebar({
                       isActive={pathname === item.href}
                       tooltip={item.title}
                     >
-                      <Link href={item.href}>
+                      <Link href={item.href} className="font-semibold text-white">
                         <item.icon className="w-4 h-4" />
                         <span>{item.title}</span>
                       </Link>
@@ -180,39 +180,39 @@ export function AppSidebar({
           <>
             <Separator className="mx-3 my-1 w-auto" />
             <div className="px-3 pb-1">
-              <p className="px-1 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+              <p className="px-1 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-sidebar-foreground/55">
                 {t('sidebar.columns')}
               </p>
               <div className="mt-1 space-y-1">
                 <button
                   onClick={() => setShowUsersColumn(!showUsersColumn)}
                   className={cn(
-                    'flex w-full items-center justify-between rounded-md px-2 py-1.5 text-xs transition-colors hover:bg-sidebar-accent/50',
-                    showUsersColumn ? 'text-foreground' : 'text-muted-foreground'
+                    'flex w-full items-center justify-between rounded-md px-2 py-1.5 text-sm font-semibold transition-colors hover:bg-sidebar-accent/50',
+                    showUsersColumn ? 'text-sidebar-foreground' : 'text-sidebar-foreground/55'
                   )}
                 >
                   <span>{t('sidebar.users')}</span>
-                  {showUsersColumn ? <EyeOff className="h-3.5 w-3.5 text-muted-foreground" /> : <Eye className="h-3.5 w-3.5" />}
+                  {showUsersColumn ? <EyeOff className="h-3.5 w-3.5 text-sidebar-foreground/55" /> : <Eye className="h-3.5 w-3.5" />}
                 </button>
                 <button
                   onClick={() => setShowTablesColumn(!showTablesColumn)}
                   className={cn(
-                    'flex w-full items-center justify-between rounded-md px-2 py-1.5 text-xs transition-colors hover:bg-sidebar-accent/50',
-                    showTablesColumn ? 'text-foreground' : 'text-muted-foreground'
+                    'flex w-full items-center justify-between rounded-md px-2 py-1.5 text-sm font-semibold transition-colors hover:bg-sidebar-accent/50',
+                    showTablesColumn ? 'text-sidebar-foreground' : 'text-sidebar-foreground/55'
                   )}
                 >
                   <span>{t('sidebar.tables')}</span>
-                  {showTablesColumn ? <EyeOff className="h-3.5 w-3.5 text-muted-foreground" /> : <Eye className="h-3.5 w-3.5" />}
+                  {showTablesColumn ? <EyeOff className="h-3.5 w-3.5 text-sidebar-foreground/55" /> : <Eye className="h-3.5 w-3.5" />}
                 </button>
                 <button
                   onClick={() => setShowActionsColumn(!showActionsColumn)}
                   className={cn(
-                    'flex w-full items-center justify-between rounded-md px-2 py-1.5 text-xs transition-colors hover:bg-sidebar-accent/50',
-                    showActionsColumn ? 'text-foreground' : 'text-muted-foreground'
+                    'flex w-full items-center justify-between rounded-md px-2 py-1.5 text-sm font-semibold transition-colors hover:bg-sidebar-accent/50',
+                    showActionsColumn ? 'text-sidebar-foreground' : 'text-sidebar-foreground/55'
                   )}
                 >
                   <span>{t('sidebar.actions')}</span>
-                  {showActionsColumn ? <EyeOff className="h-3.5 w-3.5 text-muted-foreground" /> : <Eye className="h-3.5 w-3.5" />}
+                  {showActionsColumn ? <EyeOff className="h-3.5 w-3.5 text-sidebar-foreground/55" /> : <Eye className="h-3.5 w-3.5" />}
                 </button>
               </div>
             </div>
@@ -221,7 +221,7 @@ export function AppSidebar({
               <>
                 <Separator className="mx-3 my-1 w-auto" />
                 <div className="flex-1 min-h-0 px-3 pb-1 flex flex-col">
-                  <p className="px-1 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                  <p className="px-1 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-sidebar-foreground/55">
                     {t('sidebar.recent')}
                   </p>
                   <div className="mt-1 space-y-1 flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
@@ -230,7 +230,7 @@ export function AppSidebar({
                         key={entry.id || i}
                         type="button"
                         onClick={() => onSelectHistory?.(entry)}
-                        className="flex w-full items-start gap-1.5 rounded-md px-2 py-1.5 text-[11px] leading-4 text-muted-foreground bg-sidebar-accent/20 hover:bg-sidebar-accent/40 transition-colors text-left cursor-pointer"
+                        className="flex w-full items-start gap-1.5 rounded-md px-2 py-1.5 text-xs font-semibold leading-4 text-sidebar-foreground/70 bg-sidebar-accent/35 hover:bg-sidebar-accent/55 transition-colors text-left cursor-pointer"
                       >
                         <MessageSquare className="h-3 w-3 mt-0.5 shrink-0 text-primary/60" />
                         <span className="line-clamp-2">{entry.question}</span>
@@ -255,7 +255,7 @@ export function AppSidebar({
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-xs font-medium truncate">{user?.username}</p>
-                <p className="text-[10px] text-muted-foreground">
+                <p className="text-[10px] text-sidebar-foreground/65">
                   {user?.is_admin ? t('sidebar.role_admin') : t('sidebar.role_user')}
                 </p>
               </div>
@@ -264,7 +264,7 @@ export function AppSidebar({
               variant="ghost"
               size="sm"
               onClick={handleLogout}
-              className="w-full justify-start text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+              className="w-full justify-start text-sidebar-foreground/75 hover:text-sidebar-foreground hover:bg-sidebar-accent/60"
             >
               <LogOut className="w-4 h-4" />
               <span className="ml-2">{t('nav.logout')}</span>
@@ -278,7 +278,7 @@ export function AppSidebar({
             variant="ghost"
             size="icon"
             onClick={handleLogout}
-            className={cn('mt-1 text-muted-foreground hover:text-destructive hover:bg-destructive/10', 'w-8 h-8 p-0')}
+            className={cn('mt-1 text-sidebar-foreground/75 hover:text-sidebar-foreground hover:bg-sidebar-accent/60', 'w-8 h-8 p-0')}
           >
             <LogOut className="w-4 h-4" />
           </Button>

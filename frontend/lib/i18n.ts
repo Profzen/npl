@@ -1,7 +1,5 @@
 'use client'
 
-import { useAppData } from '@/components/app-shell'
-
 export type Lang = 'fr' | 'en'
 
 type Dict = Record<string, string>
@@ -26,7 +24,7 @@ const FR: Dict = {
   'sidebar.role_admin': 'Administrateur',
   'sidebar.role_user': 'Utilisateur',
 
-  'login.brand': 'ASKSMART',
+  'login.brand': 'Audit AI',
   'login.subtitle': 'Interrogez vos journaux d\'audit Oracle en langage naturel',
   'login.title': 'Connexion',
   'login.description': 'Entrez vos identifiants pour accéder à l\'application',
@@ -57,9 +55,11 @@ const FR: Dict = {
   'dashboard.rows': 'lignes',
   'dashboard.hide_column': 'Masquer la colonne',
   'dashboard.users_title': 'Utilisateurs',
+  'dashboard.users_subtitle': 'Comptes Oracle ayant effectué des actions',
   'dashboard.tables_title': 'Tables',
+  'dashboard.tables_subtitle': 'Tables ou objets concernés par l’audit',
   'dashboard.actions_title': 'Actions',
-  'dashboard.actions_subtitle': 'Types audités',
+  'dashboard.actions_subtitle': 'Types d’actions auditées',
   'dashboard.col_user': 'Utilisateur',
   'dashboard.col_table': 'Table',
   'dashboard.col_occurrence': 'Occurrence',
@@ -137,7 +137,7 @@ const FR: Dict = {
   'admin.refresh': 'Actualiser',
   'admin.create': 'Créer',
   'admin.create_user': 'Créer un utilisateur',
-  'admin.create_desc': 'Créez un nouveau compte utilisateur pour accéder à ASKSMART',
+  'admin.create_desc': 'Créez un nouveau compte utilisateur pour accéder à Audit AI',
   'admin.username': 'Identifiant',
   'admin.username_ph': 'nouvel_utilisateur',
   'admin.password': 'Mot de passe',
@@ -192,6 +192,7 @@ const FR: Dict = {
   'settings.interface': 'Interface',
   'settings.interface_desc': 'Paramètres d\'affichage de l\'interface',
   'settings.language': 'Langue de l\'interface',
+  'settings.language_locked_help': '',
   'settings.lang_fr': 'Français',
   'settings.lang_en': 'English',
   'settings.save': 'Sauvegarder',
@@ -219,7 +220,7 @@ const EN: Dict = {
   'sidebar.role_admin': 'Administrator',
   'sidebar.role_user': 'User',
 
-  'login.brand': 'ASKSMART',
+  'login.brand': 'Audit AI',
   'login.subtitle': 'Query your Oracle audit logs in natural language',
   'login.title': 'Sign in',
   'login.description': 'Enter your credentials to access the application',
@@ -250,9 +251,11 @@ const EN: Dict = {
   'dashboard.rows': 'rows',
   'dashboard.hide_column': 'Hide column',
   'dashboard.users_title': 'Users',
+  'dashboard.users_subtitle': 'Oracle accounts that performed actions',
   'dashboard.tables_title': 'Tables',
+  'dashboard.tables_subtitle': 'Tables or objects targeted by audit logs',
   'dashboard.actions_title': 'Actions',
-  'dashboard.actions_subtitle': 'Audited types',
+  'dashboard.actions_subtitle': 'Audited action types',
   'dashboard.col_user': 'User',
   'dashboard.col_table': 'Table',
   'dashboard.col_occurrence': 'Occurrence',
@@ -330,7 +333,7 @@ const EN: Dict = {
   'admin.refresh': 'Refresh',
   'admin.create': 'Create',
   'admin.create_user': 'Create user',
-  'admin.create_desc': 'Create a new user account to access ASKSMART',
+  'admin.create_desc': 'Create a new user account to access Audit AI',
   'admin.username': 'Username',
   'admin.username_ph': 'new_user',
   'admin.password': 'Password',
@@ -385,6 +388,7 @@ const EN: Dict = {
   'settings.interface': 'Interface',
   'settings.interface_desc': 'Interface display settings',
   'settings.language': 'Interface language',
+  'settings.language_locked_help': 'The language is locked to French until the model can answer in English.',
   'settings.lang_fr': 'Français',
   'settings.lang_en': 'English',
   'settings.save': 'Save',
@@ -399,14 +403,15 @@ export function translate(lang: Lang, key: string): string {
 }
 
 export function useT() {
-  const { settings } = useAppData()
-  const lang: Lang = (settings?.interface_lang as Lang) || 'fr'
+  // Anglais temporairement désactivé : le modèle NLP répond actuellement en français.
+  // Pour le réactiver plus tard, remettre la langue depuis settings.interface_lang.
+  const lang: Lang = 'fr'
   return (key: string) => translate(lang, key)
 }
 
 export function useLang(): Lang {
-  const { settings } = useAppData()
-  return (settings?.interface_lang as Lang) || 'fr'
+  // Anglais temporairement désactivé.
+  return 'fr'
 }
 
 /**
@@ -414,15 +419,8 @@ export function useLang(): Lang {
  * Resolves language from localStorage, then navigator.language, fallback to 'fr'.
  */
 export function getStandaloneLang(): Lang {
-  if (typeof window === 'undefined') return 'fr'
-  try {
-    const stored = window.localStorage.getItem('asksmart_lang')
-    if (stored === 'fr' || stored === 'en') return stored
-  } catch {
-    /* ignore */
-  }
-  const nav = (typeof navigator !== 'undefined' ? navigator.language : 'fr') || 'fr'
-  return nav.toLowerCase().startsWith('en') ? 'en' : 'fr'
+  // Anglais temporairement désactivé : premier rendu serveur et client toujours en français.
+  return 'fr'
 }
 
 export function tStandalone(key: string): string {

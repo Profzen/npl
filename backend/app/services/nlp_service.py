@@ -160,3 +160,4 @@ def validate_sql_guardrails(sql: str) -> tuple[bool, str]:
 
 def generate_sql_from_question(question: str) -> str:
     return _generate_sql_with_model(question)
+

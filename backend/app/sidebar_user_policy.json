@@ -1,0 +1,7 @@
+{
+  "description": "Politique d'affichage de la colonne Utilisateurs. Ne filtre pas les requêtes SQL utilisateur.",
+  "technical_hide_exact": [
+    "PROD2_WLS"
+  ],
+  "technical_hide_like": []
+}

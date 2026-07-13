@@ -6,8 +6,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useAppData } from '@/components/app-shell'
+import { useAuth } from '@/lib/auth-context'
 import { updateSettings, ApiError } from '@/lib/api'
 import { useT } from '@/lib/i18n'
 import type { RuntimeSettings } from '@/lib/types'
@@ -17,6 +17,7 @@ type NotificationType = 'success' | 'error' | null
 
 export default function SettingsPage() {
   const t = useT()
+  const { user } = useAuth()
   const { settings, refreshSettings, refreshAll } = useAppData()
   const [formData, setFormData] = useState<RuntimeSettings | null>(null)
   const [showPassword, setShowPassword] = useState(false)
@@ -26,18 +27,22 @@ export default function SettingsPage() {
   // Initialize form with settings data
   useEffect(() => {
     if (settings) {
-      setFormData({ ...settings })
+      setFormData({ ...settings, interface_lang: 'fr' })
     }
   }, [settings])
 
   const handleInputChange = (field: keyof RuntimeSettings, value: string | number) => {
     if (!formData) return
+    if (field === 'interface_lang') {
+      setFormData({ ...formData, interface_lang: 'fr' })
+      return
+    }
     setFormData({ ...formData, [field]: value })
   }
 
   const handleReset = () => {
     if (settings) {
-      setFormData({ ...settings })
+      setFormData({ ...settings, interface_lang: 'fr' })
       setNotification(null)
     }
   }
@@ -49,7 +54,7 @@ export default function SettingsPage() {
     setNotification(null)
 
     try {
-      await updateSettings(formData)
+      await updateSettings({ ...formData, interface_lang: 'fr' })
       await refreshAll()
       setNotification({ type: 'success', message: t('settings.saved_success') })
     } catch (err) {
@@ -106,6 +111,7 @@ export default function SettingsPage() {
           )}
 
           {/* Oracle Connection */}
+          {user?.is_admin && (
           <Card>
             <CardHeader>
               <CardTitle className="text-lg flex items-center gap-2">
@@ -202,6 +208,7 @@ export default function SettingsPage() {
               </div>
             </CardContent>
           </Card>
+          )}
 
           {/* Analysis Settings */}
           <Card>
@@ -282,7 +289,6 @@ export default function SettingsPage() {
               </div>
             </CardContent>
           </Card>
-
           {/* Interface */}
           <Card>
             <CardHeader>
@@ -297,18 +303,16 @@ export default function SettingsPage() {
             <CardContent>
               <div className="space-y-2 max-w-sm">
                 <Label htmlFor="interface_lang">{t('settings.language')}</Label>
-                <Select
-                  value={formData.interface_lang}
-                  onValueChange={(value) => handleInputChange('interface_lang', value as 'fr' | 'en')}
-                >
-                  <SelectTrigger id="interface_lang">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="fr">Français</SelectItem>
-                    <SelectItem value="en">English</SelectItem>
-                  </SelectContent>
-                </Select>
+                <Input
+                  id="interface_lang"
+                  value="Français"
+                  disabled
+                  readOnly
+                  className="font-medium"
+                />
+                <p className="text-xs text-muted-foreground">
+                  {t('settings.language_locked_help')}
+                </p>
               </div>
             </CardContent>
           </Card>
