@@ -21,6 +21,8 @@ build/
 node_modules/
 frontend/dist/
 frontend/.vite/
+frontend/.next/
+*.tsbuildinfo
 .npm
 
 # ─── Modèles IA (fichiers lourds > GitHub 100 MB) ───────────────────────────
@@ -52,3 +54,11 @@ Thumbs.db
 # ─── Logs ───────────────────────────────────────────────────────────────────
 *.log
 logs/
+
+# Donnees runtime locales et potentiellement sensibles
+backend_auth.sqlite3
+backend_audit.sqlite3
+backend_runtime_settings.json
+
+# Artefacts temporaires de recuperation/comparaison
+.remote_repo_*

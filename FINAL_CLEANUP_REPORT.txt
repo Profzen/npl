@@ -1,0 +1,35 @@
+﻿Nettoyage final export Audit AI - 07/14/2026 13:17:33
+SUPPRIME : C:\dossier3\auditai_integration_clean\_audit_blocs.py
+SUPPRIME : C:\dossier3\auditai_integration_clean\00.md
+SUPPRIME : C:\dossier3\auditai_integration_clean\01.md
+SUPPRIME : C:\dossier3\auditai_integration_clean\02.md
+SUPPRIME : C:\dossier3\auditai_integration_clean\03.md
+SUPPRIME : C:\dossier3\auditai_integration_clean\app.js
+SUPPRIME : C:\dossier3\auditai_integration_clean\ARCHITECTURE_SPLIT.md
+SUPPRIME : C:\dossier3\auditai_integration_clean\auditai_brand_disable_english_patch
+SUPPRIME : C:\dossier3\auditai_integration_clean\auditai_export_output
+SUPPRIME : C:\dossier3\auditai_integration_clean\auditai_slate_theme_patch
+SUPPRIME : C:\dossier3\auditai_integration_clean\benchmark_15_varied_questions.py
+SUPPRIME : C:\dossier3\auditai_integration_clean\benchmark_15_varied_report.json
+SUPPRIME : C:\dossier3\auditai_integration_clean\benchmark_complex_report.json
+SUPPRIME : C:\dossier3\auditai_integration_clean\benchmark_regression_v11_targeted.py
+SUPPRIME : C:\dossier3\auditai_integration_clean\benchmark_regression_v11_targeted_report.json
+SUPPRIME : C:\dossier3\auditai_integration_clean\benchmark_v13_20q.py
+SUPPRIME : C:\dossier3\auditai_integration_clean\benchmark_v13_20q_report.json
+SUPPRIME : C:\dossier3\auditai_integration_clean\cdc.txt
+SUPPRIME : C:\dossier3\auditai_integration_clean\e.txt
+SUPPRIME : C:\dossier3\auditai_integration_clean\export_auditai_context.py
+SUPPRIME : C:\dossier3\auditai_integration_clean\Master_Convention-Stage-A-Remplir-et-Signer-et-faire-Signer (1).pdf
+SUPPRIME : C:\dossier3\auditai_integration_clean\memoire.md
+SUPPRIME : C:\dossier3\auditai_integration_clean\nlp.txt
+SUPPRIME : C:\dossier3\auditai_integration_clean\op.txt
+SUPPRIME : C:\dossier3\auditai_integration_clean\prt.txt
+SUPPRIME : C:\dossier3\auditai_integration_clean\r11.md
+SUPPRIME : C:\dossier3\auditai_integration_clean\rapport_performance_modele.csv
+SUPPRIME : C:\dossier3\auditai_integration_clean\rapport_performance_v15.csv
+SUPPRIME : C:\dossier3\auditai_integration_clean\rdm.txt
+SUPPRIME : C:\dossier3\auditai_integration_clean\README_THEME.md
+SUPPRIME : C:\dossier3\auditai_integration_clean\style.css
+SUPPRIME : C:\dossier3\auditai_integration_clean\test_tinyllama_oracle_lora_local.py
+SUPPRIME : C:\dossier3\auditai_integration_clean\test_v12_results.json
+SUPPRIME : C:\dossier3\auditai_integration_clean\test_v12_terrain.py

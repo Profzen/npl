@@ -1,282 +1,223 @@
-# memoire.md — Projet ASKSMART (NLP → SQL Oracle Audit)
+# Mémoire vivante — Audit AI / ASKSMART
 
-> Ce fichier est la **mémoire long-terme** de l'agent IA qui travaille sur ce projet.
-> Il doit être lu en premier à chaque nouvelle session pour reprendre le contexte sans perte.
-> Il est mis à jour au fil des découvertes / décisions importantes.
+Dernière mise à jour : 10 septembre 2026
 
-Dernière mise à jour : 2026-05-05
+Ce fichier conserve l'état réel du projet. Il doit être mis à jour après chaque décision,
+expérience, correction importante ou changement d'architecture.
 
----
+## 1. Objectif du projet
 
-## 1. Vision produit
+Audit AI permet à des auditeurs, responsables sécurité et managers d'interroger en français les
+journaux d'audit Oracle. Une question doit produire :
 
-**ASKSMART** (anciennement « Oracle NLP » / « QueryFlow ») est une **plateforme conversationnelle**
-qui permet à des utilisateurs **non techniques** (auditeurs, RSSI, managers) d'**interroger les
-journaux d'audit Oracle en langage naturel** (français) et d'obtenir :
+1. une requête Oracle SQL en lecture seule ;
+2. un tableau de résultats ;
+3. une synthèse compréhensible par un utilisateur non technique ;
+4. une trace applicative de l'opération.
 
-1. La requête SQL générée
-2. Les résultats sous forme de tableau
-3. Une **synthèse en français naturel** lisible par un non-informaticien
+La contrainte centrale du mémoire de master est l'exécution locale, sur CPU si nécessaire, sans
+envoyer les données d'audit à un service d'IA externe.
 
-Cible matérielle : machines clients **CPU-only** (pas de GPU à l'inférence).
+## 2. État de récupération
 
-### Préférences utilisateur (à respecter STRICTEMENT)
+- Sauvegarde locale reçue : export préparé entre le 14 et le 24 juillet 2026.
+- Dépôt distant : <https://github.com/Profzen/npl>, branche `master`.
+- Dernier commit distant observé : `93861e6`, 13 juillet 2026.
+- Le dossier local initial ne contenait pas de répertoire `.git`.
+- Le dépôt distant contient 277 fichiers ; la sauvegarde locale initiale en contient 164.
+- 119 fichiers sont communs aux deux sources.
+- Parmi eux, 92 sont identiques octet pour octet et 27 diffèrent uniquement par leurs fins de
+  ligne. Aucun code applicatif distant plus récent n'a été trouvé.
+- La sauvegarde locale apporte les modèles, la documentation d'intégration et les fichiers de
+  livraison créés après le dernier push GitHub.
+- GitHub apporte surtout le mémoire historique, les notebooks, datasets, benchmarks, prototypes
+  et sauvegardes intermédiaires.
 
-- **Français naturel non technique** dans toutes les formulations user-facing.
-- **Éviter le jargon SQL** dans les prompts visibles, exemples, tests, datasets.
-- Pas d'emojis sauf demande explicite.
+Fusion retenue : conserver le code actif de la sauvegarde locale et récupérer sous `research/`
+les sources de recherche utiles. Les `.bak`, anciens prototypes, ZIP de patch et exports découpés
+ne sont pas remis dans l'application active.
 
----
+## 3. Architecture actuelle
 
-## 2. Architecture globale
-
-```
-┌──────────────────┐      HTTP/JSON      ┌────────────────────┐     oracledb     ┌───────────┐
-│  Frontend Next 16│ ──────────────────► │  Backend FastAPI   │ ───────────────► │ Oracle DB │
-│  (React 19, TS)  │ ◄────────────────── │   (Python 3.11)    │ ◄─────────────── │  (UAT)    │
-└──────────────────┘                     └─────────┬──────────┘                  └───────────┘
-                                                   │
-                                ┌──────────────────┼─────────────────────┐
-                                ▼                  ▼                     ▼
-                       ┌────────────────┐ ┌──────────────┐    ┌────────────────────┐
-                       │ TinyLlama+LoRA │ │ Phi-3-mini   │    │ SQLite local       │
-                       │ (NL → SQL)     │ │ GGUF (synth.)│    │ auth + audit logs  │
-                       └────────────────┘ └──────────────┘    └────────────────────┘
-```
-
-### Pipeline d'une requête utilisateur
-
-1. **Frontend** envoie `POST /api/query/start` avec `{ question }`
-2. **Backend** lance un job async, renvoie `query_id`
-3. Frontend poll `GET /api/query/progress/{id}` (étapes : gen_sql → connect → exec → translate → finalize)
-4. **NLP service** (TinyLlama+LoRA) traduit la question en SQL Oracle
-5. **Oracle service** exécute la requête sur la table `SMART2DSECU.UNIFIED_AUDIT_DATA`
-6. **Synthesis service** (Phi-3 GGUF) génère un résumé en français naturel
-7. Frontend affiche les 3 blocs : SQL, résultats tabulaires, synthèse
-
----
-
-## 3. Stack technique
-
-### Backend ([backend/](backend/))
-
-- **Python 3.11** dans `venv_nlp/`
-- **FastAPI 0.116** + **Uvicorn 0.31** (ASGI, async natif)
-- **oracledb 2.4.1** (mode `thin` par défaut, async via `asyncio.to_thread`)
-- **transformers 5.2 + peft 0.18 + torch 2.10** (TinyLlama + adaptateur LoRA)
-- **llama-cpp-python 0.3.16** (Phi-3 GGUF quantisé Q4)
-- **SQLite** local pour `auth` et `audit_trail` (pas de PG/MySQL)
-- Lancement : `cd backend && uvicorn app.main:app --reload --port 8000`
-
-### Frontend ([frontend/](frontend/))
-
-- **Next.js 16.2** (App Router) + **React 19** + **TypeScript**
-- **Tailwind CSS** + **shadcn/ui** (composants Radix UI)
-- **lucide-react** pour les icônes
-- Lancement : `cd frontend && npm run dev` (port 3000)
-
-### Modèles IA
-
-| Modèle | Rôle | Format | Taille | Emplacement |
-|--------|------|--------|--------|-------------|
-| TinyLlama-1.1B-Chat-v1.0 | Base NL→SQL | safetensors | ~2.2 Go | [TinyLlama-1.1B-Chat-v1.0/](TinyLlama-1.1B-Chat-v1.0/) |
-| LoRA adapter (V12/V13) | Spécialisation Oracle audit | safetensors | ~15 Mo | [tinyllama_oracle_lora/](tinyllama_oracle_lora/) |
-| Phi-3-mini-4k-instruct | Synthèse FR | GGUF Q4 | ~640 Mo | [phi3-mini-gguf/](phi3-mini-gguf/) |
-
-> **IMPORTANT** : les poids (.safetensors, .gguf, .pt, .bin, checkpoints) sont **gitignored** (limite GitHub 100 Mo).
-> Seuls la config / tokenizer / README du LoRA sont versionnés.
-> Pour reproduire : ré-entraîner via le notebook Colab et placer les poids manuellement.
-
----
-
-## 4. Organisation du code
-
-### Backend — [backend/app/](backend/app/)
-
-| Fichier | Rôle |
-|---------|------|
-| [main.py](backend/app/main.py) | Routes FastAPI (auth, query, settings, admin), cache, jobs async |
-| [config.py](backend/app/config.py) | Settings dataclass (Oracle, modèles, pool, seuils) |
-| [schemas.py](backend/app/schemas.py) | Modèles Pydantic (request/response) |
-| [services/nlp_service.py](backend/app/services/nlp_service.py) | TinyLlama + LoRA, `generate_sql_from_question()` |
-| [services/synthesis_service.py](backend/app/services/synthesis_service.py) | Phi-3 GGUF, fallback règles |
-| [services/oracle_service.py](backend/app/services/oracle_service.py) | Pool oracledb, exécution SQL, métadonnées |
-| [services/audit_service.py](backend/app/services/audit_service.py) | SQLite : journal d'audit applicatif |
-| [services/auth_service.py](backend/app/services/auth_service.py) | SQLite : utilisateurs, sessions, tokens |
-| [services/settings_service.py](backend/app/services/settings_service.py) | Settings runtime modifiables via UI admin |
-
-### Frontend — [frontend/](frontend/)
-
-| Chemin | Rôle |
-|--------|------|
-| [app/layout.tsx](frontend/app/layout.tsx) | Layout racine + métadonnées |
-| [app/login/page.tsx](frontend/app/login/page.tsx) | Page de connexion (logo Smart2D, sans cadre) |
-| [app/(dashboard)/layout.tsx](frontend/app/(dashboard)/layout.tsx) | AppShell avec sidebar |
-| [app/(dashboard)/page.tsx](frontend/app/(dashboard)/page.tsx) | Dashboard principal (HomePage) — input question, étapes, résultats |
-| [app/(dashboard)/history/page.tsx](frontend/app/(dashboard)/history/page.tsx) | Historique des requêtes |
-| [app/(dashboard)/settings/page.tsx](frontend/app/(dashboard)/settings/page.tsx) | Paramètres (Oracle, analyse, session, interface) |
-| [app/(dashboard)/admin/page.tsx](frontend/app/(dashboard)/admin/page.tsx) | Gestion utilisateurs + logs activité |
-| [components/app-shell.tsx](frontend/components/app-shell.tsx) | Provider `useAppData` (settings, metadata, history) |
-| [components/app-sidebar.tsx](frontend/components/app-sidebar.tsx) | Sidebar (nav + Oracle status + dernières questions) |
-| [lib/api.ts](frontend/lib/api.ts) | Wrapper fetch + ApiError |
-| [lib/auth-context.tsx](frontend/lib/auth-context.tsx) | Auth React context |
-| [lib/i18n.ts](frontend/lib/i18n.ts) | Système i18n custom FR/EN (~100 clés) |
-| [lib/types.ts](frontend/lib/types.ts) | Types partagés |
-
----
-
-## 5. Internationalisation (i18n)
-
-Système **maison** sans lib externe, dans [lib/i18n.ts](frontend/lib/i18n.ts).
-
-- 2 dictionnaires : `FR` et `EN`, mêmes clés
-- Namespaces : `app.*`, `oracle.*`, `nav.*`, `sidebar.*`, `login.*`, `dashboard.*`, `step.*`, `audit.*`, `col.*`, `history.*`, `status.*`, `admin.*`, `settings.*`
-- API exportée :
-  - `useT()` : hook React, lit `settings.interface_lang` via `useAppData()`
-  - `useLang()` : retourne 'fr'|'en'
-  - `translate(lang, key)` : fonction pure (SSR/non-context)
-  - `getStandaloneLang()` + `tStandalone(key)` : pour pages hors AppShell (login)
-- Persistance : `RuntimeSettings.interface_lang` côté backend + `localStorage.asksmart_lang` côté login
-- **Règle** : aucune chaîne user-visible ne doit être codée en dur en français. Toujours passer par `t('namespace.key')`.
-
----
-
-## 6. Modèle Oracle ciblé
-
-Table prod : `SMART2DSECU.UNIFIED_AUDIT_DATA`
-Table logique d'entraînement : `ORACLE_AUDIT_TRAIL` (alias stable)
-
-> **Stratégie alias V13** (importante !) : le LoRA est entraîné avec `Table : ORACLE_AUDIT_TRAIL` dans son SYSTEM_PROMPT et tous les SQL outputs du dataset utilisent `FROM ORACLE_AUDIT_TRAIL`. Le **backend** rewrites ensuite via `_post_process_sql()` → vers la vraie table `get_oracle_table()` (= `SMART2DSECU.UNIFIED_AUDIT_DATA`). Cela permet de changer la table prod sans réentraîner le modèle. Le `SYSTEM_PROMPT` du backend doit donc dire `Table : ORACLE_AUDIT_TRAIL` (et non la vraie table), pour rester strictement aligné sur l'entraînement.
-
-Colonnes principales utilisées par le LoRA :
-`ID, AUDIT_TYPE, SESSIONID, OS_USERNAME, USERHOST, TERMINAL, AUTHENTICATION_TYPE, DBUSERNAME,
-CLIENT_PROGRAM_NAME, OBJECT_SCHEMA, OBJECT_NAME, SQL_TEXT, SQL_BINDS, EVENT_TIMESTAMP, ACTION_NAME, INSTANCE`
-
-Règles du SYSTEM_PROMPT (V12/V13 — alignement strict Colab ↔ inference ↔ backend) :
-1. Une seule table : `UNIFIED_AUDIT_DATA`
-2. **Jamais** DBA_USERS, ALL_USERS, USER_USERS
-3. Compter utilisateurs : `COUNT(DISTINCT DBUSERNAME)` en ignorant NULL
-4. Connexions : `WHERE ACTION_NAME='LOGON'` ; déconnexions : `LOGOFF`
-5. Heures : `SYSDATE-N/24` ; Jours : `SYSDATE-N` ; Minutes : `SYSDATE-N/1440`
-6. Poste/machine : `USERHOST`
-7. Horaire nocturne : `TO_CHAR(EVENT_TIMESTAMP,'HH24')`
-8. SQL Oracle valide UNIQUEMENT, sans explication
-9. SELECT uniquement
-10. Tri par date : `ORDER BY EVENT_TIMESTAMP DESC`
-11. Limite : `FETCH FIRST N ROWS ONLY`
-
-> Le prompt **doit rester identique** dans : notebook Colab (cellule 10), `nlp_service.py` (`_system_prompt`), et docs benchmarks.
-
----
-
-## 7. Workflow d'entraînement (Colab)
-
-Notebooks de référence :
-- [tinyllama_oracle_v12_dataset (2).ipynb](tinyllama_oracle_v12_dataset%20(2).ipynb) — version stable V12
-- [tinyllama_oracle_v13_dataset.ipynb](tinyllama_oracle_v13_dataset.ipynb) — V13 en cours (évolutions sur dataset)
-
-Datasets :
-- [oracle_nlp_dataset_v11.csv](oracle_nlp_dataset_v11.csv) (~production V12/V13)
-- [oracle_error_driven_pairs_v11.csv](oracle_error_driven_pairs_v11.csv) (paires correctives)
-
-Étapes notebook :
-1. Charger TinyLlama-1.1B-Chat
-2. Appliquer LoRA (PEFT) avec dataset CSV
-3. Train ~4500 steps (4 checkpoints sauvegardés)
-4. Évaluer
-5. **Quantization GGUF Q4_K_M** (~640 Mo au lieu de 2.2 Go) — décisive pour CPU client
-6. Export adapter → coller dans `tinyllama_oracle_lora/`
-
----
-
-## 8. Authentification & sécurité
-
-- Login basique username/password → token bearer
-- Sessions stockées dans `backend_auth.sqlite3`
-- Audit applicatif (qui a fait quoi) dans `backend_audit.sqlite3`
-- Rôles : `is_admin` boolean → page `/admin` réservée
-- Compte par défaut auto-créé : `admin / admin` (à changer via UI Admin)
-- CORS : configurable via `BACKEND_CORS_ORIGINS`
-
----
-
-## 9. Lancement local (développement)
-
-### 1. Backend
-```powershell
-cd c:\dossier3\nlp
-.\venv_nlp\Scripts\Activate.ps1
-cd backend
-uvicorn app.main:app --reload --port 8000
+```text
+Navigateur Next.js 16 / React 19
+             |
+             | HTTP JSON + X-Auth-Token
+             v
+Backend FastAPI
+  |-- authentification et sessions SQLite
+  |-- suivi asynchrone des analyses en mémoire
+  |-- TinyLlama 1.1B + LoRA -> SQL Oracle
+  |-- pool python-oracledb -> table d'audit Oracle
+  |-- Phi-3 Mini GGUF ou synthèse par règles -> français
+  `-- historique mémoire + journal applicatif SQLite
 ```
 
-### 2. Frontend
-```powershell
-cd c:\dossier3\nlp\frontend
-npm run dev
-# http://localhost:3000
-```
+Le frontend appelle `POST /api/query/start`, puis interroge
+`GET /api/query/progress/{request_id}` jusqu'au résultat final. Une route synchrone
+`POST /api/query` existe aussi.
 
-### Variables d'environnement utiles (sinon défauts dans config.py)
-- `ORACLE_USER`, `ORACLE_PASSWORD`, `ORACLE_HOST`, `ORACLE_PORT`, `ORACLE_SERVICE`, `ORACLE_TABLE`
-- `MODEL_DIR`, `LORA_DIR`, `PHI3_PATH`
-- `USE_GGUF_MODE=true` + `GGUF_MODEL_PATH=...` pour activer TinyLlama GGUF
-- `MAX_CONCURRENT_QUERIES_PER_USER=2`
-- `BACKEND_CORS_ORIGINS=http://localhost:3000`
+## 4. Composants actifs
 
----
+### Backend
 
-## 10. Identité visuelle
+- `backend/app/main.py` : routes, cache, concurrence et suivi des requêtes.
+- `backend/app/services/nlp_service.py` : chargement TinyLlama/LoRA et génération SQL.
+- `backend/app/services/oracle_service.py` : pool Oracle, exécution et métadonnées.
+- `backend/app/services/synthesis_service.py` : Phi-3 et synthèse déterministe de secours.
+- `backend/app/services/auth_service.py` : utilisateurs et sessions SQLite.
+- `backend/app/services/audit_service.py` : journal applicatif SQLite.
+- `backend/app/services/settings_service.py` : paramètres modifiables à l'exécution.
+- `backend/app/services/dynamic_guardrails_service.py` : garde-fous développés mais non branchés
+  dans le pipeline actuel.
 
-- **Logo** : `frontend/public/smart2d_logo.jpeg` (Smart2D Services — rouge & noir)
-- Affichage :
-  - Login : centré, `h-16`, sans cadre/fond
-  - Dashboard header : à droite de « Posez votre question », `h-9`, sans cadre
-  - Sidebar : **pas de logo** (seulement le texte ASKSMART)
-- Brand : `ASKSMART` (toujours en majuscules)
-- Tagline login : aucune (épurée à la demande utilisateur)
+### Frontend
 
----
+- connexion et restauration de session ;
+- tableau de bord question/résultat avec progression ;
+- historique propre à l'utilisateur ;
+- paramètres ;
+- gestion des utilisateurs et logs pour l'administrateur ;
+- interface française, avec ancien dictionnaire anglais encore présent mais langue verrouillée.
 
-## 11. Conventions / décisions importantes
+Le 10 septembre 2026, le frontend a été vérifié avec Node 22 : installation réussie, contrôle
+TypeScript sans erreur et build de production réussi. L'audit npm a conduit à mettre à jour
+Next.js de 16.2.0 vers 16.3.4 et PostCSS vers une version supérieure ou égale à 8.5.23. Après
+mise à jour, `npm audit` ne signale plus aucune vulnérabilité connue.
 
-- **Format chemins** : tous les liens markdown utilisent des chemins relatifs (pas de `file://`).
-- **Pas de docstrings/commentaires ajoutés** sauf si le code n'est pas auto-explicatif.
-- **Pas de fichiers MD de récap** créés sans demande explicite (sauf [memoire.md](memoire.md) lui-même et docs métier).
-- **Frontend** : préférer `multi_replace_string_in_file` pour batch de traductions.
-- **Bordures importantes UI** : `border-2 border-foreground/20` pour les cartes critiques (login).
-- Le prompt SYSTEM doit être copié **à l'identique** entre Colab/inférence/backend (sinon performance dégrade).
+## 5. Modèles présents dans la sauvegarde
 
----
+| Élément | Rôle | Taille observée | Mode actuel |
+|---|---|---:|---|
+| TinyLlama-1.1B-Chat-v1.0 | génération SQL | 2 200 119 864 octets | PyTorch CPU |
+| Adaptateur LoRA r=32 | spécialisation audit Oracle | 100 966 336 octets | PEFT |
+| Phi-3-mini-4k-instruct Q4_K_M | synthèse | 2 393 231 072 octets | llama.cpp CPU |
 
-## 12. Historique condensé (jalons)
+La documentation historique indiquait environ 640 Mo pour Phi-3. Cette valeur est fausse : le
+fichier de 640 Mo attendu correspond au TinyLlama fusionné puis quantifié, pas à Phi-3 Mini.
 
-| Date | Jalon |
-|------|-------|
-| Avr 17-20 | V12 LoRA déployée — 3/10 succès sur 10 questions de test |
-| Avr 22 | Doc [uvicron.md](uvicron.md) (WSGI/ASGI, Oracle async, Uvicorn vs Gunicorn) |
-| Avr 23–Mai 4 | V13 préparé : suppression DBA_USERS, alignement prompts, GGUF Q4 |
-| Mai 5 | Logo Smart2D, refonte UI (login/dashboard/sidebar), i18n FR/EN complet |
-| Mai 5 | Push GitHub `d5e3e33` |
-| Mai 5 | V13 finalisé : RETURNCODE retiré du dataset, alignement strict SYSTEM_PROMPT backend↔notebook (alias `ORACLE_AUDIT_TRAIL` + rewriter prod) |
+Le paramètre `USE_GGUF_MODE` existe dans la configuration, mais `nlp_service.py` ne contient pas
+encore de chemin d'inférence GGUF. Le SQL utilise donc toujours le modèle Hugging Face complet et
+le LoRA via PyTorch.
 
----
+## 6. Matériel local observé
 
-## 13. À faire / pistes d'amélioration
+- Intel Core i7-4510U à 2,00 GHz : 2 cœurs / 4 processeurs logiques.
+- 7,89 Go de RAM ; 1,34 Go disponibles au moment de la mesure.
+- Intel HD Graphics 4400 intégrée, mémoire partagée.
+- Aucun runtime NVIDIA/CUDA détecté.
 
-- [ ] Héberger les poids LoRA sur HuggingFace Hub (pour cloner sans Colab)
-- [ ] Activer Git LFS si on veut versionner les .safetensors
-- [ ] Étendre i18n à d'éventuels nouveaux écrans
-- [ ] Streaming des étapes via SSE plutôt que polling (optimisation UX)
-- [ ] Tests d'intégration end-to-end (frontend ↔ backend ↔ Oracle mock)
+La « mémoire GPU 2 Go » annoncée par Windows est de la mémoire partagée de l'iGPU. Elle ne se
+comporte pas comme 2 Go de VRAM CUDA et n'accélère pas la pile PyTorch actuelle. Charger en même
+temps TinyLlama PyTorch, Phi-3 Q4, Next.js, FastAPI, WSL et Docker est très serré avec 8 Go de RAM.
 
----
+## 7. Résultats historiques récupérés
 
-## 14. Notes méta (pour l'agent IA)
+| Évaluation | Résultat |
+|---|---:|
+| Régression V11 ciblée | 4/10, soit 40 % |
+| Benchmark varié 15 questions | 8/15, soit 53,33 % |
+| Benchmark complexe | 25/50, soit 50 % |
+| Benchmark V13, contrôle textuel | 12 OK, 6 avertissements, 2 échecs sur 20 |
+| Test terrain V12 | réponses de 24,6 à 48,3 secondes ; plusieurs erreurs SQL |
 
-- L'utilisateur travaille sur **Windows / PowerShell 5.1** (pas de `&&`, utiliser `;`).
-- Workspace racine : `c:\dossier3\nlp`
-- Repo distant : `https://github.com/Profzen/npl.git` (branche `master`)
-- Si erreur TS « Cannot find module '@/lib/i18n' » → faux positif du serveur TS, le fichier existe.
-- Toujours **vérifier `.gitignore`** avant de paniquer sur des fichiers manquants côté repo (modèles, .env, venv).
-- Les notebooks `.ipynb` sont commités, mais lourds (datasets en sortie) — éviter de les rouvrir/sauver inutilement.
+Les erreurs récurrentes concernent la confusion utilisateur/objet/poste, les connexions `LOGON`,
+les périodes en heures ou mois, les agrégations et les noms de colonnes inventés.
+
+Le rapport V15 affiche des scores élevés, mais il ne constitue pas encore une mesure fiable de
+généralisation. Il utilise surtout des contrôles de sous-chaînes, contient des cas proches des
+données synthétiques et son test du mot `USERNAME` déclenche aussi sur `DBUSERNAME`.
+
+## 8. Dataset et notebook récupérés
+
+- Dataset V15 avec provenance : 17 296 lignes, 17 156 instructions uniques et 3 100 sorties SQL
+  uniques.
+- Dataset V11 correctif : cinq cas d'erreurs réelles documentés.
+- Notebook de référence récupéré : `research/notebooks/tinyllama_oracle_v13_dataset.ipynb`.
+
+Constats sur le notebook V13 :
+
+- TinyLlama est chargé en FP16 sur GPU Colab ;
+- LoRA r=32 cible les sept projections principales ;
+- 9 500 exemples, longueur 512, batch 2, accumulation 4, quatre époques, LR `1.5e-4` ;
+- le prompt utilisateur est masqué dans les labels, ce qui est correct pour l'apprentissage de la
+  réponse SQL ;
+- aucun jeu de validation séparé ni `eval_dataset` n'est défini ;
+- aucune métrique SQL n'est calculée pendant l'entraînement ;
+- les sorties conservées montrent le lancement, mais pas la fin de l'entraînement ni un bilan
+  reproductible ;
+- `prepare_model_for_kbit_training()` est appelé alors que le modèle n'est pas chargé en 4 bits ;
+- le dataset V15 plus récent n'est pas intégré dans ce notebook V13.
+
+Conclusion : le notebook est une bonne trace expérimentale, mais il doit être refactorisé avant un
+nouvel entraînement de référence.
+
+## 9. Sécurité et défauts techniques connus
+
+1. `validate_sql_guardrails()` retourne toujours `(True, "OK")`.
+2. `dynamic_guardrails_service.py` n'est pas appelé par `main.py`.
+3. Le SQL généré est envoyé directement à Oracle après un nettoyage superficiel.
+4. Des identifiants Oracle de laboratoire et un mot de passe administrateur par défaut sont codés
+   dans la configuration et présents dans les données runtime historiques.
+5. `GET /api/settings` peut retourner le mot de passe Oracle dans le schéma actuel.
+6. Le cache de réponses dure une heure, n'est pas segmenté par utilisateur ni par période et peut
+   rendre une réponse temporelle périmée.
+7. Les jobs, le cache et l'historique sont en mémoire ; le backend doit rester à un seul worker.
+8. La documentation `backend/README.md` annonce un repli SQL déterministe, mais ce repli n'existe
+   pas dans `nlp_service.py`.
+9. L'interface masque certaines métadonnées, mais cela n'est pas une autorisation de sécurité.
+
+## 10. Décision d'architecture recommandée
+
+Conserver le fine-tuning comme axe de recherche comparatif, mais ne plus faire dépendre la sûreté
+du système de la génération libre du modèle.
+
+Pipeline cible :
+
+1. détecter l'intention, les utilisateurs, objets, actions, dates et limites ;
+2. construire un SQL depuis un AST ou des gabarits autorisés ;
+3. valider la table, les colonnes, les fonctions et le caractère lecture seule ;
+4. exécuter avec un compte Oracle strictement en lecture seule ;
+5. produire d'abord une synthèse déterministe ;
+6. employer un petit modèle local uniquement pour reformuler les cas complexes.
+
+Cette stratégie conserve l'intérêt IA du mémoire : comparaison entre modèle seul, prompt seul,
+LoRA et pipeline hybride contraint.
+
+## 11. Stratégie locale recommandée
+
+- Priorité 1 : utiliser la synthèse par règles et ne pas charger Phi-3 par défaut.
+- Priorité 2 : fusionner TinyLlama + LoRA puis produire un GGUF Q4_K_M d'environ 0,6 à 0,8 Go.
+- Priorité 3 : brancher réellement l'inférence GGUF avec `llama.cpp`.
+- Priorité 4 : limiter le contexte et les tokens, puis mesurer latence, RAM et exactitude.
+- Priorité 5 : comparer TinyLlama-LoRA à un petit modèle orienté code, sans migrer avant un
+  benchmark aveugle identique.
+
+Docker et WSL facilitent la reproductibilité et le futur déploiement Oracle Linux, mais ils ne
+rendent pas le modèle plus léger. Sur cette machine de 8 Go, l'exécution native Windows ou WSL du
+backend et du frontend sera généralement plus économe pendant le développement. Docker doit être
+validé ensuite comme cible d'intégration.
+
+## 12. Prochain plan de travail
+
+- [x] Restaurer une base Git locale reliée à `origin` sans pousser les secrets ni les modèles.
+- [ ] Créer un environnement Python compatible ; Python 3.14 installé actuellement est trop récent
+  pour garantir les versions figées de Torch, PEFT et llama-cpp-python.
+- [x] Installer, vérifier les types et construire le frontend sous Windows.
+- [ ] Lancer le backend sans Oracle avec des tests unitaires de génération/validation.
+- [ ] Réactiver et tester les garde-fous avant toute connexion Oracle.
+- [ ] Masquer les secrets et remplacer les identifiants par défaut.
+- [ ] Créer un benchmark aveugle versionné avec séparation train/validation/test par gabarit.
+- [ ] Refactoriser le notebook V15 et entraîner sur Colab, pas sur ce PC.
+- [ ] Convertir le TinyLlama-LoRA retenu en GGUF Q4_K_M.
+- [ ] Mesurer trois variantes : règles seules, TinyLlama-LoRA, petit modèle code + contraintes.
+- [ ] Tester le déploiement WSL/Docker une fois le chemin natif stable.
+
+## 13. Règles de continuité
+
+- Mettre ce fichier à jour après chaque séance utile.
+- Enregistrer les résultats négatifs autant que les succès.
+- Ne jamais mélanger les exemples d'entraînement avec le benchmark final.
+- Conserver le prompt, la version du dataset, le hash du modèle et les paramètres avec chaque
+  résultat.
+- Ne pas publier les poids, bases SQLite, `.env`, mots de passe ou données Oracle dans Git.

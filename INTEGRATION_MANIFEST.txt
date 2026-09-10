@@ -1,0 +1,17 @@
+﻿AUDIT AI - MANIFESTE D'INTEGRATION
+Date de préparation : 2026-07-20 09:23:00
+Projet source : auditai_integration_clean
+
+Éléments validés :
+- README.md
+- backend/app/main.py
+- frontend/package.json
+- requirements.txt
+- Adaptateur LoRA
+
+Éléments exclus :
+- .env et variantes sensibles
+- node_modules et environnements virtuels
+- caches, builds, logs et anciennes archives
+
+Lire README.md avant l'installation.
