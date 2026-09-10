@@ -18,6 +18,14 @@ journaux d'audit Oracle. Une question doit produire :
 La contrainte centrale du mémoire de master est l'exécution locale, sur CPU si nécessaire, sans
 envoyer les données d'audit à un service d'IA externe.
 
+L'interface vise une personne non informaticienne. Elle présente trois catalogues explicatifs :
+les utilisateurs Oracle, les tables ou objets audités, et les actions observables (`SELECT`,
+`INSERT`, `UPDATE`, `DELETE`, `GRANT`, `REVOKE`, `TRUNCATE`, etc.). Ces actions sont des événements
+à rechercher dans les journaux ; l'application ne doit jamais les exécuter. L'utilisateur peut
+poser une question naturelle, abrégée ou imparfaite, par exemple « qui a touché cette table hier ? ».
+Le système doit résoudre les dates relatives, reconnaître l'utilisateur, l'objet et l'action, puis
+demander une reformulation ciblée seulement lorsqu'une information indispensable reste ambiguë.
+
 ## 2. État de récupération
 
 - Sauvegarde locale reçue : export préparé entre le 14 et le 24 juillet 2026.
@@ -172,14 +180,20 @@ nouvel entraînement de référence.
 Conserver le fine-tuning comme axe de recherche comparatif, mais ne plus faire dépendre la sûreté
 du système de la génération libre du modèle.
 
-Pipeline cible :
+Pipeline cible, entièrement local et utilisable avec un seul modèle chargé en mémoire :
 
-1. détecter l'intention, les utilisateurs, objets, actions, dates et limites ;
-2. construire un SQL depuis un AST ou des gabarits autorisés ;
-3. valider la table, les colonnes, les fonctions et le caractère lecture seule ;
-4. exécuter avec un compte Oracle strictement en lecture seule ;
-5. produire d'abord une synthèse déterministe ;
-6. employer un petit modèle local uniquement pour reformuler les cas complexes.
+1. maintenir un catalogue local des vues d'audit, colonnes, types, synonymes et relations ;
+2. détecter l'intention, les utilisateurs, objets, actions, dates et limites avec le modèle ;
+3. demander une précision si un paramètre indispensable est absent ou contradictoire ;
+4. construire un SQL depuis un AST ou des gabarits autorisés ;
+5. valider la table, les colonnes, les fonctions et le caractère lecture seule ;
+6. exécuter avec un compte Oracle strictement en lecture seule ;
+7. rappeler le même modèle avec la question et le résultat contrôlé pour formuler la réponse ;
+8. vérifier que la synthèse conserve les nombres, dates et identités retournés par Oracle.
+
+Le modèle recommandé à évaluer en premier est Qwen3-1.7B GGUF Q4_K_M, face à
+Qwen2.5-Coder-1.5B GGUF Q4_K_M et au TinyLlama-LoRA actuel. Aucun nouvel entraînement ne sera lancé
+avant un benchmark local identique des trois candidats.
 
 Cette stratégie conserve l'intérêt IA du mémoire : comparaison entre modèle seul, prompt seul,
 LoRA et pipeline hybride contraint.
