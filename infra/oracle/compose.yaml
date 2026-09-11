@@ -1,0 +1,19 @@
+services:
+  oracle:
+    image: container-registry.oracle.com/database/free:latest
+    container_name: auditai-oracle
+    restart: unless-stopped
+    ports:
+      - "1521:1521"
+    environment:
+      ORACLE_PWD: ${ORACLE_SYS_PASSWORD}
+      AUDITAI_OWNER_PASSWORD: ${AUDITAI_OWNER_PASSWORD}
+      AUDITAI_READER_PASSWORD: ${AUDITAI_READER_PASSWORD}
+    shm_size: 1g
+    volumes:
+      - auditai_oradata:/opt/oracle/oradata
+      - ./setup:/opt/oracle/scripts/setup:ro
+
+volumes:
+  auditai_oradata:
+

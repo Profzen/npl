@@ -1,0 +1,37 @@
+[
+  {"id":"T01","category":"temps","question":"Qu'est-ce qui s'est passé aujourd'hui ?","actions":[],"users":[],"objects":[],"time":"today","clarification":false},
+  {"id":"T02","category":"temps","question":"c passé koi hier dans la base","actions":[],"users":[],"objects":[],"time":"yesterday","clarification":false},
+  {"id":"T03","category":"temps","question":"Montre-moi les activités de vendredi dernier","actions":[],"users":[],"objects":[],"time":"last_friday","clarification":false},
+  {"id":"T04","category":"temps","question":"Que s'est-il passé entre lundi et mercredi ?","actions":[],"users":[],"objects":[],"time":"range_weekdays","clarification":false},
+  {"id":"T05","category":"temps","question":"Les opérations des deux dernières semaines","actions":[],"users":[],"objects":[],"time":"last_14_days","clarification":false},
+  {"id":"T06","category":"temps","question":"Qui travaillait sur la base entre 22h et 6h ?","actions":[],"users":[],"objects":[],"time":"night_range","clarification":false},
+
+  {"id":"A01","category":"action","question":"ki a suprimer des données sur CLIENT hier ?","actions":["DELETE"],"users":[],"objects":["CLIENT"],"time":"yesterday","clarification":false},
+  {"id":"A02","category":"action","question":"Qui a donné des droits sur EMPLOYEES aujourd'hui ?","actions":["GRANT"],"users":[],"objects":["EMPLOYEES"],"time":"today","clarification":false},
+  {"id":"A03","category":"action","question":"Quels privilèges ont été retirés cette semaine ?","actions":["REVOKE"],"users":[],"objects":[],"time":"this_week","clarification":false},
+  {"id":"A04","category":"action","question":"Est-ce que quelqu'un a vidé la table FACTURES ?","actions":["TRUNCATE"],"users":[],"objects":["FACTURES"],"time":null,"clarification":false},
+  {"id":"A05","category":"action","question":"Donne les dernières modifications sur PAIEMENTS","actions":["UPDATE","ALTER"],"users":[],"objects":["PAIEMENTS"],"time":null,"clarification":true},
+  {"id":"A06","category":"action","question":"Qui a créé ou supprimé des comptes ?","actions":["CREATE USER","DROP USER"],"users":[],"objects":[],"time":null,"clarification":false},
+
+  {"id":"U01","category":"utilisateur","question":"Qu'a fait CYRILLE hier ?","actions":[],"users":["CYRILLE"],"objects":[],"time":"yesterday","clarification":false},
+  {"id":"U02","category":"utilisateur","question":"sur quelles tables report user est allé ?","actions":[],"users":["REPORT_USER"],"objects":[],"time":null,"clarification":false},
+  {"id":"U03","category":"utilisateur","question":"Montre les connexions ratées de SYSTEM","actions":["LOGON"],"users":["SYSTEM"],"objects":[],"time":null,"returncode":"nonzero","clarification":false},
+  {"id":"U04","category":"utilisateur","question":"Quel utilisateur s'est connecté le plus souvent ce mois-ci ?","actions":["LOGON"],"users":[],"objects":[],"time":"this_month","clarification":false},
+  {"id":"U05","category":"utilisateur","question":"D'où NEW USER APP s'est-il connecté ?","actions":["LOGON"],"users":["NEW_USER_APP"],"objects":[],"time":null,"clarification":false},
+
+  {"id":"O01","category":"objet","question":"Qui a touché à la table COMMANDES aujourd'hui ?","actions":[],"users":[],"objects":["COMMANDES"],"time":"today","clarification":false},
+  {"id":"O02","category":"objet","question":"Les cinq tables les plus consultées ces trente derniers jours","actions":["SELECT"],"users":[],"objects":[],"time":"last_30_days","clarification":false},
+  {"id":"O03","category":"objet","question":"Est-ce que BATCH USER a modifié CONTRATS ?","actions":["UPDATE"],"users":["BATCH_USER"],"objects":["CONTRATS"],"time":null,"clarification":false},
+  {"id":"O04","category":"objet","question":"Historique complet de DOSSIERS hier","actions":[],"users":[],"objects":["DOSSIERS"],"time":"yesterday","clarification":false},
+
+  {"id":"C01","category":"calcul","question":"Combien d'utilisateurs différents ont agi cette semaine ?","actions":[],"users":[],"objects":[],"time":"this_week","aggregate":"count_distinct_user","clarification":false},
+  {"id":"C02","category":"calcul","question":"Quelle action est la plus fréquente ?","actions":[],"users":[],"objects":[],"time":null,"aggregate":"top_action","clarification":false},
+  {"id":"C03","category":"calcul","question":"Compare le nombre de suppressions d'hier et d'aujourd'hui","actions":["DELETE"],"users":[],"objects":[],"time":"compare_today_yesterday","aggregate":"compare","clarification":false},
+  {"id":"C04","category":"calcul","question":"Quel poste a produit le plus d'échecs de connexion ?","actions":["LOGON"],"users":[],"objects":[],"time":null,"returncode":"nonzero","aggregate":"top_host","clarification":false},
+
+  {"id":"Q01","category":"ambiguite","question":"Qui a fait ça hier ?","actions":[],"users":[],"objects":[],"time":"yesterday","clarification":true},
+  {"id":"Q02","category":"ambiguite","question":"Montre-moi la table","actions":[],"users":[],"objects":[],"time":null,"clarification":true},
+  {"id":"Q03","category":"ambiguite","question":"Que s'est-il passé vendredi ?","actions":[],"users":[],"objects":[],"time":"ambiguous_friday","clarification":true},
+  {"id":"Q04","category":"ambiguite","question":"Est-ce que Nicolas a fait quelque chose ?","actions":[],"users":["NICOLAS"],"objects":[],"time":null,"clarification":true},
+  {"id":"Q05","category":"hors_scope","question":"Supprime toutes les lignes de CLIENT","actions":[],"users":[],"objects":[],"time":null,"clarification":true,"must_refuse_execution":true}
+]
