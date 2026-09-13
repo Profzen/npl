@@ -1,6 +1,6 @@
 # Mémoire vivante — Audit AI / ASKSMART
 
-Dernière mise à jour : 10 septembre 2026
+Dernière mise à jour : 13 septembre 2026
 
 Ce fichier conserve l'état réel du projet. Il doit être mis à jour après chaque décision,
 expérience, correction importante ou changement d'architecture.
@@ -487,3 +487,330 @@ Dernières validations :
 - services arrêtés après validation pour libérer la RAM.
 
 Pour reprendre : lire d'abord les sections 14 à 19, puis `LOCAL_RUN.md`. La commande normale est `powershell -ExecutionPolicy Bypass -File .\scripts\start-local.ps1`. Le projet est prêt pour les essais utilisateur et la préparation de la soutenance. Les améliorations futures doivent ajouter un nouveau corpus aveugle avant toute modification sémantique, afin de conserver une mesure honnête.
+
+## 20. État de référence complet pour la reprise et la rédaction technique — 13 septembre 2026
+
+> Cette section est la référence actuelle. Les sections 3 à 12 décrivent en partie l'architecture récupérée avant sa modernisation ; elles sont conservées comme historique expérimental. Le runtime actif est celui décrit ici et dans les lots 15 à 19.
+
+### 20.1 Résumé exécutif
+
+AuditAI, aussi nommé ASKSMART dans certains fichiers historiques, est un assistant local d'analyse des journaux d'audit Oracle destiné à des utilisateurs non informaticiens. L'utilisateur formule librement une question en français. Le système identifie les utilisateurs, objets, actions, périodes et calculs demandés, construit une lecture Oracle sûre, exécute cette lecture avec un compte sans droit d'écriture, puis présente le résultat sous forme de tableau et d'explication simple.
+
+La version récupérée utilisait deux modèles : TinyLlama 1.1B avec un adaptateur LoRA pour générer librement le SQL, puis Phi-3 Mini pour rédiger la synthèse. Les mesures locales ont montré que cette architecture était trop lente sur le PC actuel, consommait inutilement la mémoire et ne sécurisait pas suffisamment l'exécution. Le runtime actif utilise maintenant un seul modèle, Qwen2.5-Coder-1.5B-Instruct Q4_K_M. Qwen comprend la question et produit une intention JSON ; du code déterministe contrôlé produit ensuite le SQL Oracle. Le même Qwen peut résumer les résultats comportant plusieurs lignes. Les résultats simples utilisent une synthèse déterministe pour conserver exactement les valeurs.
+
+Le projet fonctionne localement de bout en bout. Oracle, le modèle, l'API et l'interface ont été testés ensemble. La principale étape scientifique restante est d'élargir l'évaluation aveugle, surtout pour mesurer la qualité des explications destinées aux utilisateurs non techniques. Aucun score actuel ne permet d'affirmer que le système ne commettra jamais d'erreur.
+
+### 20.2 Besoin utilisateur et périmètre fonctionnel
+
+Le public visé comprend les auditeurs, responsables de sécurité, managers et agents métier qui ne connaissent ni SQL ni le schéma physique de la base. L'interface met à leur disposition trois catalogues :
+
+1. les utilisateurs Oracle visibles ;
+2. les tables ou objets audités ;
+3. les actions observables, accompagnées d'une explication simple.
+
+Les actions telles que SELECT, INSERT, UPDATE, DELETE, GRANT, REVOKE, ALTER ou TRUNCATE désignent des événements déjà enregistrés dans le journal. Elles ne donnent pas à l'application le droit d'exécuter ces opérations.
+
+Exemples de besoins couverts : identifier qui a consulté ou modifié une table, rechercher une suppression, examiner les activités d'un utilisateur, retrouver les connexions échouées, comparer aujourd'hui et hier, rechercher une période telle que vendredi dernier, cette semaine ou les trente derniers jours, compter des utilisateurs distincts et identifier l'action, l'utilisateur, le poste ou l'objet le plus fréquent.
+
+Une question libre n'est pas comparée à une liste de phrases mémorisées. Qwen réalise une interprétation sémantique à chaque demande. Les formulations « Qui a modifié CLIENT hier ? », « Quelle personne a touché à la table CLIENT pendant la journée d'hier ? » et « Y a qui qui a changé CLIENT hier ? » doivent converger vers la même intention. La limite fonctionnelle porte sur les informations réellement présentes dans le journal et les familles d'analyses prises en charge, pas sur une liste fermée de phrases.
+
+### 20.3 Pipeline actif
+
+Le chemin d'exécution actuel est :
+
+~~~text
+Navigateur Next.js
+    -> API FastAPI authentifiée
+    -> lecture des catalogues Oracle
+    -> Qwen : question française vers intention JSON
+    -> politique d'intention : ancrage, normalisation, clarification ou refus
+    -> constructeur SQL Oracle en lecture seule avec paramètres liés
+    -> exécution par AUDITAI_READER
+    -> tableau exact
+    -> synthèse déterministe ou synthèse Qwen contrôlée
+    -> réponse française
+~~~
+
+L'intention JSON contient : le statut, les utilisateurs, les objets, les actions, la période, l'agrégat, l'indicateur d'échecs uniquement, la limite et un éventuel message de clarification. Les statuts possibles sont query, clarification et refusal.
+
+Le caractère intelligent se situe dans la compréhension de la langue, des synonymes, du contexte et des combinaisons de critères. Le caractère déterministe se situe dans la sécurité, le dialecte Oracle, les paramètres liés et les calculs autorisés. Cette séparation conserve la flexibilité linguistique sans faire confiance à un texte SQL inventé par le modèle.
+
+### 20.4 Pourquoi le SQL libre a été abandonné
+
+Le benchmark de 30 cas avec Qwen2.5-Coder produisant directement du SQL a obtenu un score structurel moyen de 0,564. Seulement 5 requêtes sur 28 devant être exécutées ont réussi dans Oracle. Les erreurs incluaient l'emploi de LIMIT, qui n'est pas le dialecte Oracle attendu, l'interrogation de tables métier au lieu du journal, l'invention d'utilisateurs, d'actions ou de périodes et la mauvaise gestion des ambiguïtés.
+
+Le cas critique « Supprime toutes les lignes de CLIENT » a conduit le modèle à générer DELETE FROM CLIENT malgré une consigne de refus. Le compte AUDITAI_READER aurait bloqué l'écriture, mais cette expérience démontre qu'une consigne textuelle ne constitue pas à elle seule une barrière de sécurité.
+
+La version active ne transmet jamais du SQL libre du modèle à Oracle. Le constructeur n'accepte que le statut query, une liste fermée d'actions, de périodes et d'agrégats, la table SMART2DSECU.UNIFIED_AUDIT_DATA et une limite maximale de 200 lignes. Les valeurs d'utilisateur, d'objet et d'action passent par des paramètres liés ; elles ne sont pas concaténées dans le SQL.
+
+### 20.5 Comparaison des modèles
+
+| Variante | Taille | Usage évalué | Résultat local | Décision |
+|---|---:|---|---|---|
+| TinyLlama-1.1B + LoRA r=32 | environ 2,2 Go + 101 Mo | SQL libre via PyTorch | aucune réponse après plus de quatre minutes sur ce CPU | retiré du runtime, conservé comme expérience historique |
+| Phi-3-mini-4k-instruct Q4_K_M | environ 2,39 Go | synthèse française | charge un second modèle et augmente la pression mémoire | retiré du runtime actif |
+| Qwen3-1.7B Q8_0 | environ 1,75 Gio | SQL avec prompt minimal puis enrichi | 51,69 s avec oubli du filtre CLIENT ; 69,22 s avec résultat correct | correct mais trop lent ici |
+| Qwen2.5-Coder-1.5B-Instruct Q4_K_M | environ 1,07 Gio | intention et synthèse via llama.cpp | 28,34 s avec chargement ; environ 6 à 10 s avec serveur persistant | modèle actif |
+
+Qwen2.5-Coder a été choisi pour son compromis entre compréhension, respect du format JSON, vitesse, taille et exécution CPU. La quantification Q4_K_M réduit la mémoire et accélère l'inférence avec une perte de qualité limitée. Le modèle est servi par llama.cpp sur 127.0.0.1:8080, avec un contexte de 2 048 tokens, quatre threads et une requête simultanée.
+
+### 20.6 Signification exacte des scores
+
+La loss est une mesure calculée pendant l'entraînement. Aucun nouvel entraînement de Qwen n'a été réalisé dans cette reprise ; il n'existe donc aucune nouvelle loss Qwen à annoncer. Une loss basse ne suffit pas à prouver la validité Oracle, la sécurité ou la qualité des réponses.
+
+| Évaluation | Cas | Score | Statuts corrects | Exécutions Oracle | SQL dangereux | Latence modèle |
+|---|---:|---:|---:|---:|---:|---:|
+| SQL libre Qwen | 30 | 0,564 | non mesuré | 5/28 | 1 généré | 15,357 s |
+| intention JSON brute | 30 | 0,744 | 86,7 % | 26/28 | 0 | 9,739 s |
+| pipeline normalisé, développement | 30 | 1,000 | 100 % | 25/25 | 0 | 8,409 s |
+| paraphrases v1 avant correction | 20 | 0,862 | 85 % | 18/18 | 0 | 9,796 s |
+| paraphrases v2 avant correction | 12 | 0,819 | 83,3 % | 12/12 | 0 | 6,558 s |
+| paraphrases v3 figées, premier passage | 12 | 0,891 | 83,3 % | 12/12 | 0 | 6,770 s |
+| v3 après correction, non-régression | 12 | 1,000 | 100 % | 10/10 | 0 | 8,589 s |
+
+Le score 0,891, soit 89,1 %, est la mesure de généralisation à citer actuellement, car elle correspond au premier passage sur le jeu v3 avant adaptation. Le score 1,000 après correction signifie seulement que les cas connus ne régressent plus. Il ne garantit pas une précision universelle de 100 %. Les corpus v1 et v2 ont servi au développement et ne doivent plus être présentés comme tests aveugles.
+
+Le corpus de questions est un banc d'essai versionné associant des questions à des intentions attendues. Il ne constitue pas une base de réponses consultée pendant l'utilisation. Une question jamais vue peut réussir si le modèle en comprend le sens et si la demande appartient au périmètre couvert.
+
+### 20.7 État de la synthèse destinée aux non-informaticiens
+
+Pour zéro ligne, une ligne ou un agrégat, la réponse est construite par des règles. Exemples : « Aucune activité ne correspond à cette demande », « L'action la plus fréquente est SELECT, avec 626 événement(s) » ou une description d'un événement avec utilisateur, action, objet, date et poste. Le test unitaire vérifie que le nom SELECT et le nombre 626 sont conservés. Le test HTTP de bout en bout valide également une réponse agrégée réelle.
+
+Pour plusieurs lignes, Qwen reçoit la question, le nombre total de lignes et au maximum 25 lignes contrôlées. Le prompt lui impose une réponse française de une à cinq phrases, la conservation exacte des noms, nombres, dates, heures et postes, l'absence d'invention et l'absence de jargon SQL. En cas d'échec du modèle, le système revient à une réponse déterministe indiquant le nombre d'événements et renvoie le tableau détaillé.
+
+Cette partie est fonctionnelle mais n'a pas encore reçu un benchmark humain assez large. Il est donc interdit d'affirmer que toutes les synthèses multilignes sont parfaitement fidèles ou accessibles. La prochaine évaluation doit mesurer séparément : fidélité aux lignes Oracle, conservation des nombres et identités, couverture des faits importants, absence d'hallucination, simplicité du français et utilité de la clarification.
+
+### 20.8 Base Oracle locale et données disponibles
+
+L'infrastructure se trouve dans infra/oracle. Docker utilise l'image officielle container-registry.oracle.com/database/free:latest, identifiée pendant les essais comme Oracle AI Database Free 26ai, version rapportée 23.26.3.0.0. Le conteneur s'appelle auditai-oracle, publie le port 1521 et utilise le service FREEPDB1. Le volume Docker auditai_oradata conserve les données. La politique restart: "no" évite de charger Oracle automatiquement et de saturer la machine.
+
+Deux comptes applicatifs ont été créés :
+
+- SMART2DSECU : propriétaire du schéma de démonstration ;
+- AUDITAI_READER : compte du backend, autorisé uniquement à ouvrir une session et à lire les deux tables.
+
+La table SMART2DSECU.UNIFIED_AUDIT_DATA contient 5 003 événements simulés répartis sur 90 jours. Son schéma est :
+
+| Colonne | Type | Signification |
+|---|---|---|
+| ID | NUMBER identity | identifiant technique unique |
+| AUDIT_TYPE | VARCHAR2(30) | origine ou catégorie de l'audit |
+| SESSIONID | NUMBER | identifiant de session Oracle |
+| OS_USERNAME | VARCHAR2(128) | utilisateur du système d'exploitation |
+| USERHOST | VARCHAR2(255) | poste, serveur ou hôte source |
+| TERMINAL | VARCHAR2(128) | terminal de la session |
+| AUTHENTICATION_TYPE | VARCHAR2(64) | méthode d'authentification |
+| DBUSERNAME | VARCHAR2(128) | utilisateur Oracle ayant réalisé l'action |
+| CLIENT_PROGRAM_NAME | VARCHAR2(255) | outil client, par exemple JDBC, TOAD ou sqlplus |
+| OBJECT_SCHEMA | VARCHAR2(128) | schéma propriétaire de l'objet |
+| OBJECT_NAME | VARCHAR2(128) | table ou objet concerné |
+| SQL_TEXT | VARCHAR2(2000) | texte SQL enregistré dans l'événement simulé |
+| SQL_BINDS | VARCHAR2(2000) | valeurs liées éventuellement enregistrées |
+| EVENT_TIMESTAMP | TIMESTAMP(6) | date et heure de l'événement |
+| ACTION_NAME | VARCHAR2(128) | action auditée |
+| RETURNCODE | NUMBER | zéro en cas de succès, valeur non nulle en cas d'échec |
+| INSTANCE | NUMBER | instance Oracle concernée |
+
+Des index existent sur EVENT_TIMESTAMP, DBUSERNAME, OBJECT_NAME et ACTION_NAME. Ils accélèrent les principaux filtres employés par l'application.
+
+La table SMART2DSECU.AUDITAI_SEMANTIC_CATALOG contient CATEGORY, CANONICAL_NAME, DESCRIPTION_FR et SYNONYMS_FR. Sa clé primaire est le couple CATEGORY/CANONICAL_NAME. Elle documente les concepts ACTION, TIME, USER et OBJECT avec des descriptions et synonymes français. Elle sert à rapprocher le langage utilisateur des valeurs Oracle ; elle ne contient pas des réponses préfabriquées.
+
+Les données simulées comprennent quatorze utilisateurs dans la génération, quinze objets et seize branches d'actions. Le filtrage d'affichage testé expose actuellement neuf utilisateurs et quatorze objets dans l'interface. Trois événements ciblés facilitent les démonstrations : une suppression de CLIENT par CYRILLE hier à 14 h, un GRANT sur EMPLOYEES par SYSTEM aujourd'hui à 9 h et une consultation d'EMPLOYEES par REPORT_USER le vendredi précédent.
+
+### 20.9 Topologie d'exécution, Docker et consommation mémoire
+
+La topologie actuellement validée privilégie la consommation réduite :
+
+- Oracle s'exécute dans Docker sous Oracle Linux WSL2 ;
+- llama-server et Qwen s'exécutent nativement sous Windows ;
+- FastAPI s'exécute avec Python sous Windows ;
+- Next.js s'exécute avec Node.js sous Windows ;
+- tous les services écoutent uniquement sur 127.0.0.1, sauf le port Oracle publié localement par Docker.
+
+Docker améliore l'isolation, la reproductibilité et le transport vers une autre machine. Il ne rend ni Oracle ni Qwen moins gourmands. Sous Windows, une conteneurisation complète peut ajouter la mémoire de WSL2, du moteur Docker, des images et des couches réseau. Le choix actuel est donc cohérent pour le développement sur 8 Go.
+
+Pour la livraison, un profil Docker Compose complet pourra être ajouté afin de démarrer Oracle, le modèle, l'API et l'interface par une seule commande. Ce profil devra rester optionnel. La version légère déjà validée doit être conservée pour les machines modestes. La cohérence d'une soutenance repose aussi sur les scripts reproductibles et la documentation ; elle n'exige pas que tous les processus soient conteneurisés.
+
+La mesure de la pile complète sur le PC actuel donne 7,89 Go de RAM physique, 7,30 Go utilisés et 0,59 Go libres. Oracle représente environ 1,622 Gio, Qwen environ 0,990 Go de working set, WSL/vmmem environ 1,523 Go, le processus Node principal environ 138 Mo plus ses auxiliaires et FastAPI environ 11 Mo au repos.
+
+Huit gigaoctets permettent l'exécution mais laissent très peu de marge. Les 16 Go de fichier d'échange ajoutés sur le SSD amélioreront la stabilité après redémarrage, mais le swap est beaucoup plus lent que la RAM physique et n'accélère pas l'inférence. Seize gigaoctets de RAM physique sont recommandés pour une démonstration fluide. Vingt-quatre ou trente-deux gigaoctets offriraient davantage de confort pour développer et comparer des modèles plus lourds.
+
+### 20.10 Sécurité mise en œuvre
+
+La sécurité ne dépend pas d'une seule protection :
+
+1. le modèle produit une intention et aucun SQL exécutable ;
+2. normalize_intent ancre les noms dans les catalogues et détecte les ordres de mutation ;
+3. build_safe_audit_query n'accepte que query et construit uniquement SELECT ou WITH ;
+4. une seule table est autorisée ;
+5. les actions, périodes et agrégats appartiennent à des listes fermées ;
+6. les valeurs sont passées par des paramètres liés ;
+7. la limite est comprise entre 1 et 200 ;
+8. AUDITAI_READER ne possède aucun droit d'écriture ;
+9. les clarifications et refus ne produisent aucun SQL ;
+10. l'interface conserve le marqueur blocked pour les refus.
+
+Les secrets sont lus depuis infra/oracle/.env, qui est ignoré par Git. Le mot de passe Oracle n'est plus persisté dans backend_runtime_settings.json et GET /api/settings renvoie toujours un champ vide. Le mot de passe administrateur historique codé en dur a été supprimé. Le lanceur génère au besoin un mot de passe aléatoire local sans l'afficher. Les anciens identifiants du laboratoire ne sont plus présents dans le runtime actif.
+
+Les dossiers .runtime, logs, tools, les modèles, le fichier .env et les paramètres runtime secrets restent hors Git selon les règles du dépôt. Aucun secret ni poids de modèle n'a été poussé.
+
+### 20.11 Stratégie d'apprentissage et décision sur un futur LoRA
+
+Aucun nouvel entraînement ne doit être lancé simplement pour corriger chaque question isolée. La stratégie retenue est :
+
+1. collecter des erreurs réelles et les classer ;
+2. corriger une erreur de schéma ou de sécurité dans le code ;
+3. corriger un synonyme stable dans le catalogue ;
+4. corriger une instruction générale dans le prompt ;
+5. réserver l'entraînement aux erreurs linguistiques récurrentes que le prompt et le catalogue ne résolvent pas proprement ;
+6. mesurer toute modification sur un nouveau jeu aveugle jamais utilisé pour la correction.
+
+Un corpus d'entraînement éventuel devra contenir de nombreuses formulations différentes, des fautes plausibles, du langage familier, des questions incomplètes, des demandes ambiguës, des refus attendus et des combinaisons inédites d'utilisateur, objet, action, période et agrégat. Le modèle devra apprendre à produire l'intention JSON, pas du SQL libre.
+
+Un entraînement LoRA ou QLoRA de Qwen2.5-Coder-1.5B sur Kaggle ou Colab est techniquement possible. Les données de l'entreprise ne devront pas être envoyées telles quelles sur ces plateformes ; le corpus doit être synthétique ou anonymisé. Après entraînement, il faudra conserver l'adaptateur, éventuellement le fusionner au modèle, convertir le résultat en GGUF Q4_K_M, puis comparer le modèle original et le modèle adapté sur exactement le même test aveugle.
+
+Le protocole minimal d'une future expérience comprend trois ensembles séparés par familles de formulations : entraînement, validation et test final. Il faut enregistrer la version du modèle, le dataset, les paramètres LoRA, les graines, les loss d'entraînement et de validation, la conformité JSON, le score d'intention, le taux de statut correct, le taux d'exécution Oracle, la fidélité de la synthèse, la latence et la mémoire. L'adaptateur ne sera retenu que s'il améliore la généralisation sans diminuer la sécurité ni la vitesse de façon excessive.
+
+Décision actuelle : conserver Qwen sans nouvel entraînement, construire d'abord une évaluation plus large, puis décider sur des preuves. Cette décision n'abandonne pas le fine-tuning ; elle le transforme en expérience comparative justifiée.
+
+### 20.12 Limites connues et affirmations autorisées
+
+Affirmations appuyées par les mesures :
+
+- le projet fonctionne entièrement en local après installation des dépendances et modèles ;
+- Qwen2.5-Coder Q4 est le meilleur candidat mesuré sur ce PC parmi les variantes exécutées ;
+- le pipeline hybride est nettement plus sûr et plus compatible Oracle que le SQL libre ;
+- aucune commande destructive n'a été construite pendant les passages hybrides ;
+- le premier score aveugle v3 est 89,1 % ;
+- le système complet fonctionne avec 8 Go, mais 16 Go de RAM physique sont recommandés.
+
+Affirmations à ne pas faire :
+
+- « précision universelle de 100 % » ;
+- « comprend toutes les questions possibles » ;
+- « aucune hallucination possible » ;
+- « synthèses multilignes toutes validées par des utilisateurs » ;
+- « le swap équivaut à de la RAM physique » ;
+- « Docker réduit la consommation du modèle ».
+
+Limites techniques actuelles :
+
+- petit modèle de 1,5 milliard de paramètres, donc compréhension imparfaite des formulations très complexes ;
+- périodes et agrégats couverts par un ensemble contrôlé qui devra être étendu selon les besoins ;
+- références conversationnelles comme « cette table » sans contexte explicite conduisent actuellement à une clarification ;
+- synthèse Qwen limitée aux 25 premières lignes et à environ 5 000 caractères ;
+- jobs, cache et historique principal restent en mémoire et le backend doit rester à un seul worker ;
+- test de lisibilité et de fidélité des réponses multilignes encore insuffisant ;
+- données Oracle actuelles simulées et non encore comparées à un véritable export d'audit anonymisé.
+
+### 20.13 Tests, fichiers de preuve et reproductibilité
+
+Les fichiers essentiels sont :
+
+- backend/app/services/local_model_service.py : prompts d'intention et de synthèse, appel llama-server, repli déterministe ;
+- backend/app/services/intent_policy.py : normalisation, synonymes, périodes, agrégats, clarifications et refus ;
+- backend/app/services/safe_sql_builder.py : SQL Oracle paramétré et listes autorisées ;
+- backend/app/services/oracle_service.py : connexion, paramètres liés et métadonnées ;
+- backend/app/main.py : orchestration de l'API ;
+- backend/tests/test_safe_pipeline.py : tests unitaires de sécurité, intentions et synthèse simple ;
+- research/benchmarks : corpus, scripts, résultats JSON et rapports ;
+- infra/oracle : Compose, schéma, données et documentation ;
+- scripts/start-local.ps1, test-local.ps1 et stop-local.ps1 : exploitation locale ;
+- LOCAL_RUN.md : procédure courte.
+
+Dernières validations connues : compilation Python réussie, 10 tests unitaires sur 10 réussis, TypeScript sans erreur, build Next.js réussi, test HTTP authentifié complet réussi et git diff --check réussi. Le test HTTP vérifie la santé de l'API, Oracle et Qwen, les catalogues, le masquage du secret, le frontend, une agrégation, une clarification et un refus destructeur.
+
+Le test de synthèse existant prouve la conservation d'un libellé et d'un nombre dans un agrégat. Il ne suffit pas à valider toutes les réponses naturelles. Le prochain benchmark doit inclure 50 à 100 questions inédites, dont une part importante avec résultats multilignes, et une grille d'évaluation humaine.
+
+### 20.14 Commandes normales et diagnostic
+
+Depuis la racine du projet :
+
+~~~powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\start-local.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\test-local.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\stop-local.ps1
+~~~
+
+La première commande démarre Oracle, Qwen, FastAPI et Next.js. L'interface est disponible sur http://127.0.0.1:3000, l'API sur http://127.0.0.1:8000 et le serveur Qwen sur http://127.0.0.1:8080. Le compte initial est admin ; son mot de passe se trouve dans la variable AUDITAI_ADMIN_PASSWORD du fichier local ignoré infra/oracle/.env.
+
+Le lanceur attend à la fois le port 1521 et l'état Docker healthy d'Oracle, car l'écoute réseau peut commencer avant que FREEPDB1 soit utilisable. Les sorties sont conservées dans logs/backend.err.log, logs/llama.err.log et logs/frontend.err.log. Les PID sont conservés temporairement dans .runtime. Le script d'arrêt libère les ports 3000, 8000, 8080 et arrête auditai-oracle.
+
+Les scripts PowerShell contenant du français doivent conserver leur encodage UTF-8 avec BOM pour Windows PowerShell 5.
+
+### 20.15 Récupération, Git et état exact
+
+Le dépôt GitHub https://github.com/Profzen/npl a été comparé à la sauvegarde locale. Le code applicatif local était le plus récent ; les notebooks, datasets et traces utiles du dépôt distant ont été rangés sous research. Les archives, sauvegardes intermédiaires et prototypes obsolètes ne sont pas revenus dans le runtime actif.
+
+Branche actuelle : master, quatre commits locaux devant origin/master. Historique de reprise :
+
+- 54ba161 : récupération et consolidation de l'état AuditAI ;
+- 8cd5ba8 : documentation du workflow local à modèle unique ;
+- f9765fe : environnement Oracle local et corpus de comparaison ;
+- fa6dd98 : intégration du pipeline Qwen/Oracle sécurisé.
+
+Aucun push n'a été effectué. Au dernier contrôle précédant cette mise à jour, l'arbre était propre et les services étaient arrêtés. La modification présente de memoire.md rendra naturellement ce fichier modifié jusqu'au prochain commit.
+
+### 20.16 Plan de travail à poursuivre
+
+Priorité A — évaluation honnête :
+
+- [ ] figer un corpus aveugle v4 de 50 à 100 questions avant toute nouvelle correction ;
+- [ ] inclure fautes, langage familier, synonymes, dates variées, ambiguïtés, refus et questions hors périmètre ;
+- [ ] vérifier intention, SQL attendu, résultat Oracle et réponse française ;
+- [ ] faire noter la simplicité des réponses par plusieurs personnes non informaticiennes si possible ;
+- [ ] publier séparément premier passage aveugle et non-régression après correction.
+
+Priorité B — amélioration fonctionnelle :
+
+- [ ] ajouter une conservation explicite du contexte conversationnel si « cette table » doit reprendre une sélection ou une question précédente ;
+- [ ] étendre périodes et agrégats uniquement à partir de besoins observés ;
+- [ ] contrôler automatiquement que les noms et nombres de chaque synthèse Qwen appartiennent aux résultats Oracle ;
+- [ ] améliorer l'explication des résultats multilignes et des absences de résultat ;
+- [ ] tester les questions hors domaine et les erreurs de connexion.
+
+Priorité C — expérience d'entraînement :
+
+- [ ] décider du LoRA seulement après analyse des erreurs v4 ;
+- [ ] préparer un dataset synthétique ou anonymisé séparé train/validation/test ;
+- [ ] entraîner Qwen sur Kaggle ou Colab pour l'intention JSON ;
+- [ ] convertir et importer les poids localement ;
+- [ ] comparer modèle original et modèle adapté avec le même protocole.
+
+Priorité D — livraison :
+
+- [ ] rédiger le chapitre d'architecture et le protocole expérimental à partir de ce fichier ;
+- [ ] ajouter éventuellement un profil Docker Compose complet sans remplacer le mode léger ;
+- [ ] tester après redémarrage l'effet du nouveau fichier d'échange ;
+- [ ] effectuer une répétition complète de soutenance hors ligne ;
+- [ ] créer un commit local documentant chaque nouveau lot ; ne pousser que sur demande explicite.
+
+### 20.17 Glossaire pour la rédaction
+
+- Modèle de langage : programme entraîné à interpréter et générer du texte.
+- Prompt engineering : rédaction du rôle, des consignes, du format et du contexte fournis au modèle.
+- Intention : représentation structurée de ce que demande l'utilisateur.
+- Corpus : ensemble versionné de questions et de résultats attendus servant à entraîner ou évaluer.
+- Corpus aveugle : questions jamais utilisées pour corriger le système avant leur premier passage.
+- Généralisation : capacité à traiter correctement des formulations nouvelles.
+- Non-régression : vérification que les cas déjà corrigés fonctionnent toujours.
+- Loss : erreur mathématique optimisée pendant l'entraînement ; elle ne mesure pas directement la sécurité ou l'utilité.
+- LoRA : petit adaptateur entraîné sur un modèle existant sans réentraîner tous ses paramètres.
+- Quantification Q4 : représentation compacte des poids sur quatre bits pour réduire RAM et latence.
+- GGUF : format de modèle utilisé par llama.cpp.
+- llama.cpp : moteur local d'inférence optimisé pour CPU.
+- Hallucination : information produite par le modèle sans appui dans les données.
+- Paramètre lié : valeur envoyée séparément du texte SQL pour éviter la concaténation et les injections.
+- Garde-fou : contrôle empêchant une action, une valeur ou une requête interdite.
+- Synthèse déterministe : réponse fabriquée par du code avec les valeurs exactes.
+- Synthèse générative : réponse rédigée par Qwen à partir de résultats contrôlés.
+- Runtime : composants réellement utilisés lors de l'exécution.
+- Swap ou fichier d'échange : espace disque utilisé lorsque la RAM manque, plus lent que la mémoire physique.
+
+### 20.18 Conclusion technique actuelle
+
+La contribution principale n'est pas seulement l'emploi d'un modèle de langage. Elle réside dans l'association d'une compréhension linguistique locale, d'un catalogue sémantique Oracle, d'une politique d'intention vérifiable, d'une génération SQL déterministe, d'un compte Oracle strictement lecteur et d'une synthèse adaptée à un public non technique.
+
+L'expérience démontre que la génération SQL libre donne une apparence d'autonomie mais reste peu fiable et dangereuse sur un petit modèle local. Le pipeline hybride obtient une meilleure compatibilité Oracle et supprime les commandes destructrices des évaluations réalisées. Il conserve la capacité de comprendre des formulations nouvelles, car Qwen interprète chaque question au lieu de rechercher une phrase prédéfinie.
+
+Le résultat scientifique actuel doit être présenté avec prudence : 89,1 % au premier passage du corpus aveugle v3, puis 100 % sur la non-régression après correction. La suite du travail doit mesurer la fidélité et la lisibilité des réponses finales sur un corpus plus large avant de décider si un LoRA apporte un gain réel.
