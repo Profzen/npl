@@ -63,13 +63,51 @@ if ($short.row_count -ne 1 -or $short.rows.Count -ne 1 -or $short.sql -notmatch 
 $semanticBody = @{ question = "qui est la derniere persone a effectuer une action en base" } | ConvertTo-Json
 $semanticBytes = [Text.Encoding]::UTF8.GetBytes($semanticBody)
 $semantic = Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:8000/api/query" -Headers $headers -ContentType "application/json; charset=utf-8" -Body $semanticBytes
-if ($semantic.intent_status -ne "query" -or $semantic.row_count -ne 1 -or $semantic.sql -notmatch "PARTITION BY UPPER\(DBUSERNAME\)" -or $semantic.sql -notmatch "FETCH FIRST 1 ROWS ONLY" -or $semantic.synthesis -notmatch "dernier utilisateur") {
+if (
+    $semantic.intent_status -ne "query" -or
+    $semantic.row_count -ne 1 -or
+    $semantic.sql -notmatch "ORDER BY EVENT_TIMESTAMP DESC" -or
+    $semantic.sql -notmatch "FETCH FIRST 1 ROWS ONLY" -or
+    $semantic.sql -match "COUNT\(\*\)|GROUP BY DBUSERNAME"
+) {
     throw "La compréhension sémantique de la dernière personne n'est pas correcte."
+}
+
+$topBody = @{ question = "Quel compte a réalisé le plus d'opérations ces 10 derniers jours ?" } | ConvertTo-Json
+$topBytes = [Text.Encoding]::UTF8.GetBytes($topBody)
+$top = Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:8000/api/query" -Headers $headers -ContentType "application/json; charset=utf-8" -Body $topBytes
+if (
+    $top.intent_status -ne "query" -or
+    $top.row_count -ne 1 -or
+    $top.sql -notmatch "NUMTODSINTERVAL\(:time_value, 'DAY'\)" -or
+    $top.sql -notmatch "GROUP BY DBUSERNAME" -or
+    $top.sql -notmatch "ORDER BY EVENT_COUNT DESC" -or
+    $top.sql -notmatch "FETCH FIRST 1 ROWS ONLY"
+) {
+    throw "Le classement sur une durée variable n'est pas correct."
+}
+
+$listBody = @{ question = "Donne-moi la liste des tables auditées" } | ConvertTo-Json
+$listBytes = [Text.Encoding]::UTF8.GetBytes($listBody)
+$list = Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:8000/api/query" -Headers $headers -ContentType "application/json; charset=utf-8" -Body $listBytes
+$listColumns = @($list.rows[0].PSObject.Properties.Name)
+if (
+    $list.intent_status -ne "query" -or
+    $list.sql -notmatch "^SELECT DISTINCT OBJECT_NAME" -or
+    $listColumns.Count -ne 1 -or
+    $listColumns[0] -ne "OBJECT_NAME"
+) {
+    throw "La liste des tables auditées n'est pas isolée des événements."
 }
 
 $history = Invoke-RestMethod -Uri "http://127.0.0.1:8000/api/history" -Headers $headers
 $lastHistory = $history | Select-Object -Last 1
-if (-not $lastHistory -or -not $lastHistory.synthesis -or $lastHistory.rows.Count -ne 1) {
+if (
+    -not $lastHistory -or
+    -not $lastHistory.synthesis -or
+    $lastHistory.question -ne $list.question -or
+    $lastHistory.rows.Count -ne $list.rows.Count
+) {
     throw "La dernière question ne conserve pas sa réponse et ses lignes."
 }
 
@@ -86,6 +124,8 @@ if (-not $lastHistory -or -not $lastHistory.synthesis -or $lastHistory.rows.Coun
     destructive_request = $refusal.intent_status
     short_result_rows = $short.row_count
     semantic_latest_user_rows = $semantic.row_count
+    variable_period_ranking_rows = $top.row_count
+    audited_table_columns = $listColumns.Count
     history_result_rows = $lastHistory.rows.Count
 } | Format-List
 

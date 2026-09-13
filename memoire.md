@@ -1212,3 +1212,14 @@ Fichiers principaux : backend/app/services/query_plan_service.py, backend/app/se
 5. corriger les défauts d’architecture sans inscrire de question complète dans le code ;
 6. relancer les 51 tests, les lectures Oracle, le build et le test HTTP adapté ;
 7. compléter cette section avec les mesures, le commit, le push et l’état final testable.
+
+
+### Complément de validation et outils de reprise
+
+Les six unités relatives ont ensuite été exécutées directement sur Oracle : 90 minutes, 17 heures, 10 jours, 2 semaines, 3 mois et 1 an. Les six requêtes ont été acceptées. Pour les semaines, le compilateur lie un nombre de jours ; pour les mois et années, il lie un nombre de mois. Aucun nombre issu de la question n’est injecté dans le texte SQL.
+
+scripts/download-qwen7b.py est maintenant versionné. Il reprend 64 morceaux avec un nombre de connexions réglable, assemble le GGUF, vérifie la taille puis l’empreinte SHA-256 avant de publier le fichier final. Les morceaux sont supprimés uniquement après validation complète. LOCAL_RUN.md documente le téléchargement, les profils auto, light et quality, ainsi que la recommandation de 16 Go de RAM physique.
+
+scripts/test-local.ps1 a été adapté au nouveau contrat. Il vérifie désormais que la dernière personne est obtenue par tri temporel sans comptage, que le classement sur dix jours contient la période liée, le groupement et la limite un, et qu’une liste de tables ne contient que OBJECT_NAME. Ce test doit être exécuté après le premier démarrage complet du profil quality ; il n’est pas compté comme réussi dans ce checkpoint.
+
+Le tri frontend utilise désormais l’ordre inverse des entrées reçues plutôt que les seules secondes de leurs dates. Plusieurs questions posées durant la même seconde conservent ainsi l’ordre réel le plus récent en premier. Le contrôle TypeScript local passe après cette modification. Le script ESLint ne peut pas être exécuté dans l’installation actuelle, car le binaire eslint n’est pas présent dans node_modules malgré la présence du script npm ; aucune dépendance supplémentaire n’a été installée pour ce seul contrôle.
