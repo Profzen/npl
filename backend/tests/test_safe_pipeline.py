@@ -102,6 +102,44 @@ class SafeSqlBuilderTests(unittest.TestCase):
         query = build_safe_audit_query(intent, default_limit=10)
         self.assertIn("FETCH FIRST 3 ROWS ONLY", query.sql)
 
+    def test_three_latest_distinct_users(self) -> None:
+        intent = normalize_intent(
+            "quels sont les trois derniers user a avoir fais une action en base ?",
+            {}, USERS, OBJECTS,
+        )
+        self.assertEqual(intent["aggregate"], "latest_users")
+        self.assertEqual(intent["limit"], 3)
+        query = build_safe_audit_query(intent, default_limit=10)
+        self.assertIn("PARTITION BY UPPER(DBUSERNAME)", query.sql)
+        self.assertIn("AUDITAI_RN = 1", query.sql)
+        self.assertIn("FETCH FIRST 3 ROWS ONLY", query.sql)
+
+    def test_latest_user_who_deleted(self) -> None:
+        intent = normalize_intent(
+            "qui est le dernier utilisateur a avoir fais un delete ?",
+            {}, USERS, OBJECTS,
+        )
+        self.assertEqual(intent["aggregate"], "latest_users")
+        self.assertEqual(intent["actions"], ["DELETE"])
+        self.assertEqual(intent["limit"], 1)
+        query = build_safe_audit_query(intent, default_limit=10)
+        self.assertIn("UPPER(ACTION_NAME) IN (:action_0)", query.sql)
+        self.assertEqual(query.binds["action_0"], "DELETE")
+        self.assertIn("FETCH FIRST 1 ROWS ONLY", query.sql)
+
+    def test_three_latest_actions_on_employees(self) -> None:
+        intent = normalize_intent(
+            "quels sont les trois dernieres action effectué sur la table EMPLOYEES",
+            {}, USERS, OBJECTS,
+        )
+        self.assertIsNone(intent["aggregate"])
+        self.assertEqual(intent["objects"], ["EMPLOYEES"])
+        self.assertEqual(intent["limit"], 3)
+        query = build_safe_audit_query(intent, default_limit=10)
+        self.assertIn("UPPER(OBJECT_NAME) IN (:object_0)", query.sql)
+        self.assertEqual(query.binds["object_0"], "EMPLOYEES")
+        self.assertIn("FETCH FIRST 3 ROWS ONLY", query.sql)
+
     def test_unknown_action_is_rejected(self) -> None:
         with self.assertRaises(UnsafeIntentError):
             build_safe_audit_query({
@@ -146,6 +184,28 @@ class SynthesisTests(unittest.TestCase):
         )
         self.assertIn("L'utilisateur CYRILLE a réalisé", answer)
         self.assertIn("CLIENT", answer)
+
+    def test_latest_user_answer_names_the_user_directly(self) -> None:
+        answer = build_local_synthesis(
+            "qui est le dernier utilisateur a avoir fais un delete ?",
+            [{"DBUSERNAME": "HR", "ACTION_NAME": "DELETE", "OBJECT_NAME": "FACTURES"}],
+            None,
+        )
+        self.assertIn("Le dernier utilisateur correspondant est HR", answer)
+        self.assertNotIn("200", answer)
+
+    def test_three_latest_users_answer_matches_the_question(self) -> None:
+        answer = build_local_synthesis(
+            "quels sont les trois derniers user a avoir fais une action en base ?",
+            [
+                {"DBUSERNAME": "A", "ACTION_NAME": "SELECT"},
+                {"DBUSERNAME": "B", "ACTION_NAME": "UPDATE"},
+                {"DBUSERNAME": "C", "ACTION_NAME": "DELETE"},
+            ],
+            None,
+        )
+        self.assertIn("trois derniers utilisateurs", answer)
+        self.assertNotIn("200", answer)
 
     def test_two_rows_are_explained_as_sentences(self) -> None:
         answer = build_local_synthesis(

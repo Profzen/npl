@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 import os
+import re
+import unicodedata
 import urllib.request
 from datetime import date, datetime
 from typing import Any, Iterable
@@ -21,7 +23,7 @@ N'invente aucune entité. Une liste vide signifie tous.
 Limit est un nombre seulement si l'utilisateur demande explicitement un nombre de résultats, sinon null.
 Périodes: today, yesterday, last_friday, range_weekdays, last_14_days, night_range,
 this_week, this_month, last_30_days, compare_today_yesterday ou null.
-Agrégats: count_distinct_user, top_action, compare, top_host, top_user, top_objects ou null.
+Agrégats: count_distinct_user, top_action, compare, top_host, top_user, top_objects, latest_users ou null.
 Actions: LOGON, LOGOFF, SELECT, INSERT, UPDATE, DELETE, GRANT, REVOKE, ALTER, TRUNCATE,
 CREATE USER, DROP USER, ALTER USER, CREATE TABLE, DROP TABLE.
 Une question sur une suppression ou un droit est une consultation d'audit.
@@ -122,7 +124,20 @@ def interpret_question(
     return normalize_intent(question, raw_intent, known_users, known_objects), model_error
 
 
-def _rule_synthesis(rows: list[dict[str, Any]], error: str | None = None) -> str:
+def _is_latest_user_question(question: str) -> bool:
+    normalized = unicodedata.normalize("NFKD", question)
+    normalized = "".join(char for char in normalized if not unicodedata.combining(char)).upper()
+    return bool(
+        re.search(r"\b(DERNIERS?|DERNIERES?|RECENTS?|RECENTES?)\b", normalized)
+        and re.search(r"\b(USERS?|UTILISATEURS?|COMPTES?)\b", normalized)
+    )
+
+
+def _rule_synthesis(
+    rows: list[dict[str, Any]],
+    error: str | None = None,
+    question: str = "",
+) -> str:
     if error:
         return "La recherche n'a pas abouti. Vérifiez la connexion locale puis reformulez la demande."
     if not rows:
@@ -168,6 +183,8 @@ def _rule_synthesis(rows: list[dict[str, Any]], error: str | None = None) -> str
             detail += f" depuis {row['USERHOST']}"
         if row.get("RETURNCODE") not in (None, 0, "0"):
             detail += f", avec le code d'échec {row['RETURNCODE']}"
+        if _is_latest_user_question(question) and row.get("DBUSERNAME"):
+            return f"Le dernier utilisateur correspondant est {row['DBUSERNAME']}. {detail}."
         return f"Un événement correspond à la demande. {detail}."
     if len(rows) <= 3:
         descriptions: list[str] = []
@@ -203,13 +220,15 @@ def _rule_synthesis(rows: list[dict[str, Any]], error: str | None = None) -> str
             descriptions.append(detail)
 
         count_label = "Deux" if len(rows) == 2 else "Trois"
+        if _is_latest_user_question(question):
+            return f"Voici les {count_label.lower()} derniers utilisateurs concernés. " + ". ".join(descriptions) + "."
         return f"{count_label} événements correspondent à la demande. " + ". ".join(descriptions) + "."
     return "Plusieurs événements correspondent à la demande. Consultez le tableau pour le détail exact."
 
 
 def build_local_synthesis(question: str, rows: list[dict[str, Any]], error: str | None) -> str:
     if error or not rows or len(rows) <= 3:
-        return _rule_synthesis(rows, error)
+        return _rule_synthesis(rows, error, question)
     compact_rows = rows[:25]
     user_content = (
         f"Question: {question}\n"
@@ -220,5 +239,5 @@ def build_local_synthesis(question: str, rows: list[dict[str, Any]], error: str 
     try:
         return _chat(_SYNTHESIS_PROMPT, user_content[:5000], max_tokens=180)
     except Exception:
-        return _rule_synthesis(rows, error)
+        return _rule_synthesis(rows, error, question)
 

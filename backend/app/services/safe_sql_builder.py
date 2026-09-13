@@ -18,7 +18,7 @@ ALLOWED_PERIODS = {
 }
 ALLOWED_AGGREGATES = {
     None, "count_distinct_user", "top_action", "compare",
-    "top_host", "top_user", "top_objects",
+    "top_host", "top_user", "top_objects", "latest_users",
 }
 _SAFE_VALUE = re.compile(r"^[A-Z0-9_$# .-]{1,128}$")
 
@@ -146,6 +146,26 @@ def build_safe_audit_query(intent: Mapping[str, Any], default_limit: int = 200) 
             clauses.append(period_sql)
 
     where = " WHERE " + " AND ".join(f"({clause})" for clause in clauses) if clauses else ""
+
+    if aggregate == "latest_users":
+        inner_select = (
+            "SELECT DBUSERNAME, ACTION_NAME, OBJECT_NAME, EVENT_TIMESTAMP, USERHOST, "
+            "CLIENT_PROGRAM_NAME, RETURNCODE, "
+            "ROW_NUMBER() OVER (PARTITION BY UPPER(DBUSERNAME) "
+            "ORDER BY EVENT_TIMESTAMP DESC) AS AUDITAI_RN"
+        )
+        non_null_user = "DBUSERNAME IS NOT NULL"
+        inner_where = " WHERE " + " AND ".join(
+            f"({clause})" for clause in [*clauses, non_null_user]
+        )
+        sql = (
+            "SELECT DBUSERNAME, ACTION_NAME, OBJECT_NAME, EVENT_TIMESTAMP, USERHOST, "
+            "CLIENT_PROGRAM_NAME, RETURNCODE FROM ("
+            f"{inner_select} FROM {AUDIT_TABLE}{inner_where}"
+            ") WHERE AUDITAI_RN = 1 "
+            f"ORDER BY EVENT_TIMESTAMP DESC FETCH FIRST {limit} ROWS ONLY"
+        )
+        return SafeQuery(sql=sql, binds=binds)
 
     if aggregate == "count_distinct_user":
         select = "SELECT COUNT(DISTINCT DBUSERNAME) AS USER_COUNT"

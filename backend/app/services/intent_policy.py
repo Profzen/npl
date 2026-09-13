@@ -41,7 +41,7 @@ def _detect_actions(text: str) -> list[str]:
         actions.append("DROP USER")
     if not drop_account and (
         re.search(
-            r"\b(SUPRIME|SUPRIMER|SUPPRIME|SUPPRIMER|SUPPRESSIONS?|EFFACE|EFFACER)\b",
+            r"\b(SUPRIME|SUPRIMER|SUPPRIME|SUPPRIMER|SUPPRESSIONS?|EFFACE|EFFACER|DELETE)\b",
             text,
         )
         or re.search(r"\bRETIRE\b.*\b(LIGNES?|ENREGISTREMENTS?)\b", text)
@@ -105,6 +105,19 @@ def _detect_period(text: str) -> str | None:
     return None
 
 def _detect_aggregate(text: str) -> tuple[str | None, int]:
+    if (
+        re.search(
+            r"\b(DERNIERS?|DERNIERES?|RECENTS?|RECENTES?)\b.*"
+            r"\b(USERS?|UTILISATEURS?|COMPTES?)\b",
+            text,
+        )
+        or re.search(
+            r"\b(USERS?|UTILISATEURS?|COMPTES?)\b.*"
+            r"\b(DERNIERS?|DERNIERES?|RECENTS?|RECENTES?)\b",
+            text,
+        )
+    ):
+        return "latest_users", 200
     if re.search(
         r"(COMBIEN|NOMBRE).*(UTILISATEURS?|COMPTES?).*(DIFFERENTS?|DISTINCTS?)",
         text,
@@ -136,7 +149,7 @@ def _detect_requested_limit(text: str) -> int | None:
     )
     if re.search(
         r"\b(?:LE|LA)\s+(?:DERNIER|DERNIERE|PREMIER|PREMIERE)\s+"
-        r"(?:EVENEMENT|RESULTAT|LIGNE|OPERATION|ACTION)\b",
+        r"(?:EVENEMENT|RESULTAT|LIGNE|OPERATION|ACTION|USER|UTILISATEUR|COMPTE)\b",
         text,
     ):
         return 1
@@ -149,9 +162,13 @@ def _detect_requested_limit(text: str) -> int | None:
         "UN": 1, "UNE": 1, "DEUX": 2, "TROIS": 3, "QUATRE": 4,
         "CINQ": 5, "SIX": 6, "SEPT": 7, "HUIT": 8, "NEUF": 9, "DIX": 10,
     }
+    word_matches: list[tuple[int, int]] = []
     for word, value in words.items():
-        if re.search(rf"\b{word}\s+(?:{item_words})\b", text):
-            return value
+        match = re.search(rf"\b{word}\s+(?:{item_words})\b", text)
+        if match:
+            word_matches.append((match.start(), value))
+    if word_matches:
+        return min(word_matches)[1]
     return None
 
 

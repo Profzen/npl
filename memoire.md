@@ -969,3 +969,49 @@ Le script scripts/test-local.ps1 vérifie désormais aussi une réponse d'une li
 La correction améliore la construction et la restitution, mais elle ne transforme pas le score aveugle de généralisation : la référence scientifique reste 89,1 %. Les SQL vérifiés sont exacts pour les cas représentatifs ci-dessus ; toute formulation nouvelle doit continuer à être ajoutée à un corpus aveugle avant correction.
 
 La prochaine amélioration de l'historique sera sa persistance dans SQLite avec stockage contrôlé des résultats ou possibilité de réexécuter une ancienne question. La prochaine évaluation de synthèse devra examiner des résultats de quatre lignes ou plus pour mesurer la variété, la fidélité et l'absence d'informations inventées.
+
+## 24. Correction sémantique des demandes « derniers utilisateurs » — 13 septembre 2026
+
+### Analyse des captures et diagnostic
+
+Trois résultats affichés dans l'historique ont été réexaminés avec les formulations exactes de l'utilisateur. Les SQL visibles dans ces captures n'étaient pas fidèles aux quantités demandées : ils contenaient tous `FETCH FIRST 200 ROWS ONLY`. Oracle cherchait donc effectivement jusqu'à 200 lignes. Le défaut ne concernait pas seulement le nombre de lignes affichées ou le texte de la synthèse.
+
+Pour « quels sont les trois derniers user à avoir fait une action en base ? », une simple lecture des trois derniers événements ne suffit pas : un même compte pourrait apparaître plusieurs fois. Le sens retenu est celui des trois utilisateurs distincts dont l'activité la plus récente est la plus récente dans le journal.
+
+Pour « qui est le dernier utilisateur à avoir fait un DELETE ? », la requête doit filtrer l'action DELETE, trier par date décroissante et retourner une seule personne. Pour « quelles sont les trois dernières actions effectuées sur la table EMPLOYEES », elle doit filtrer l'objet EMPLOYEES et retourner exactement les trois événements les plus récents.
+
+Les captures correspondaient à des entrées enregistrées avant la correction de la limite réelle. Cliquer sur une ancienne question restaure le SQL et la réponse conservés ; ce clic ne réexécute pas automatiquement la question. Une nouvelle exécution crée une entrée corrigée.
+
+### Corrections de compréhension
+
+Une intention contrôlée `latest_users` a été ajoutée à la politique d'interprétation et à la liste autorisée du modèle local. Elle est reconnue lorsque la question associe les mots utilisateur, user ou compte à une idée de récence comme dernier ou récent. Cette règle s'applique à des familles de formulations et ne constitue pas une requête préfabriquée pour une seule phrase.
+
+L'analyse des quantités tient maintenant compte de la position des expressions dans la phrase. Dans « trois derniers user à avoir fait une action », la quantité trois apparaît avant « une action » et reste donc la quantité demandée. Auparavant, le déterminant « une » pouvait être interprété à tort comme une demande d'une seule ligne. Les formes singulières « le dernier utilisateur », « le dernier user » et « le dernier compte » produisent une limite de un.
+
+Le mot anglais `DELETE`, couramment employé par les administrateurs Oracle dans une phrase française, est désormais reconnu directement comme l'action de suppression. Cette reconnaissance complète les formulations françaises déjà prises en charge.
+
+### Construction SQL sécurisée
+
+L'intention `latest_users` utilise une fonction analytique Oracle : `ROW_NUMBER() OVER (PARTITION BY UPPER(DBUSERNAME) ORDER BY EVENT_TIMESTAMP DESC)`. Chaque utilisateur reçoit ainsi un rang interne ; seul son événement de rang 1 est conservé. Le résultat est ensuite trié par date décroissante et limité à la quantité demandée. Les filtres d'action, d'objet, d'utilisateur, de période et d'échec restent appliqués avec des paramètres liés dans la sous-requête.
+
+Cette construction permet notamment de répondre à « trois derniers utilisateurs » sans retourner trois fois le même compte. Elle demeure en lecture seule, cible exclusivement `SMART2DSECU.UNIFIED_AUDIT_DATA` et ne laisse pas le modèle produire librement du SQL.
+
+### Synthèse destinée à une personne non technique
+
+La synthèse déterministe courte tient maintenant compte de l'objet de la question. Pour une demande portant sur plusieurs utilisateurs récents, elle annonce directement « Voici les trois derniers utilisateurs concernés », puis décrit l'activité récente de chacun. Pour une demande singulière, elle annonce directement le nom du dernier utilisateur correspondant, puis précise l'action, l'objet, la date et le poste disponibles. Aucun plafond technique de 200 n'est présenté comme un résultat métier.
+
+### Validation avec les formulations exactes
+
+Après redémarrage de l'API, les trois questions ont été envoyées à l'API authentifiée et exécutées réellement sur Oracle :
+
+1. « quels sont les trois derniers user a avoir fais une action en base ? » : SQL avec partition par `DBUSERNAME`, `FETCH FIRST 3 ROWS ONLY`, trois utilisateurs distincts et trois lignes retournées ;
+2. « qui est le dernier utilisateur a avoir fais un delete ? » : filtre lié `ACTION_NAME=DELETE`, dédoublonnage par utilisateur, `FETCH FIRST 1 ROWS ONLY`, une ligne retournée ; la réponse nomme HR et décrit sa suppression sur FACTURES ;
+3. « quels sont les trois dernieres action effectué sur la table EMPLOYEES » : filtre lié `OBJECT_NAME=EMPLOYEES`, ordre décroissant par date, `FETCH FIRST 3 ROWS ONLY` et trois lignes retournées.
+
+Les résultats du jeu synthétique courant étaient respectivement CYRILLE_TBS, SYSTEM et ITEST pour les trois utilisateurs récents ; HR pour le dernier utilisateur ayant effectué un DELETE ; puis trois événements EMPLOYEES attribués à SYSTEM, PROD2_STB et SYSTEM. Ces noms décrivent le jeu de démonstration synthétique documenté à la section 22 et ne doivent pas être présentés comme des activités réelles de production.
+
+La suite de tests backend contient maintenant 20 cas, tous réussis. Elle couvre explicitement les trois phrases signalées, la détection de la quantité, les filtres DELETE et EMPLOYEES, le dédoublonnage des utilisateurs, les limites 3/1/3 et les formulations de synthèse. Le contrôle local complet confirme également : API opérationnelle, Oracle connecté, Qwen chargé, frontend HTTP 200, secrets masqués, agrégation valide, clarification valide, ordre destructeur refusé, résultat court exact et restauration de l'historique.
+
+### Portée du résultat
+
+Ces trois requêtes sont désormais conformes à leur question et ont été vérifiées de bout en bout. Ce correctif ajoute une capacité sémantique générale sur les utilisateurs récents ; il ne justifie pas d'annoncer 100 % de précision pour toute question future. La mesure de généralisation de référence reste 89,1 % sur le premier passage aveugle v3. Les formulations nouvelles continueront à servir de cas d'évaluation et de non-régression.
