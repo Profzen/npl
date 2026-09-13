@@ -194,62 +194,75 @@ def _detect_requested_limit(text: str) -> int | None:
         r"DERNIERS?|DERNIERES?|PREMIERS?|PREMIERES?|EVENEMENTS?|RESULTATS?|"
         r"LIGNES?|OPERATIONS?|ACTIONS?|TABLES?|OBJETS?"
     )
+    # Forme grammaticale singulière générale : elle fonctionne quel que soit
+    # le nom employé ensuite (personne, auteur, événement, opération, etc.).
     if re.search(
-        r"\b(?:LE|LA)\s+(?:DERNIER|DERNIERE|PREMIER|PREMIERE)\s+"
-        r"(?:EVENEMENT|RESULTAT|LIGNE|OPERATION|ACTION|USER|UTILISATEUR|COMPTE)\b",
+        r"\b(?:LE|LA)\s+(?:DERNIER|DERNIERE|PREMIER|PREMIERE)\b",
         text,
     ):
         return 1
+
+    ranking_cue = (
+        r"DERNIERS?|DERNIERES?|PREMIERS?|PREMIERES?|PLUS\s+RECEMMENT|"
+        r"PLUS\s+RECENTS?|PLUS\s+RECENTES?|PLUS\s+FREQUENTS?|PLUS\s+FREQUENTES?"
+    )
+    ranked_numeric = re.search(
+        rf"\b(\d{{1,3}})\b(?:\s+[A-Z0-9_$#]+){{0,4}}\s+(?:{ranking_cue})\b",
+        text,
+    )
+    if ranked_numeric:
+        return max(1, min(200, int(ranked_numeric.group(1))))
 
     numeric = re.search(rf"\b(\d{{1,3}})\s+(?:{item_words})\b", text)
     if numeric:
         return max(1, min(200, int(numeric.group(1))))
 
     words = {
-        "UN": 1, "UNE": 1, "DEUX": 2, "TROIS": 3, "QUATRE": 4,
+        "DEUX": 2, "TROIS": 3, "QUATRE": 4,
         "CINQ": 5, "SIX": 6, "SEPT": 7, "HUIT": 8, "NEUF": 9, "DIX": 10,
     }
     word_matches: list[tuple[int, int]] = []
     for word, value in words.items():
-        match = re.search(rf"\b{word}\s+(?:{item_words})\b", text)
-        if match:
-            word_matches.append((match.start(), value))
+        patterns = (
+            rf"\b{word}\b(?:\s+[A-Z0-9_$#]+){{0,4}}\s+(?:{ranking_cue})\b",
+            rf"\b{word}\s+(?:{item_words})\b",
+        )
+        matches = [match for pattern in patterns if (match := re.search(pattern, text))]
+        if matches:
+            word_matches.append((min(match.start() for match in matches), value))
     if word_matches:
         return min(word_matches)[1]
     return None
 
 
-def _has_time_cue(text: str) -> bool:
-    return bool(re.search(
-        r"\b(JOUR|JOURNEE|HIER|VEILLE|SEMAINE|QUINZAINE|MOIS|VENDREDI|"
-        r"HEURE|NUIT|MATIN|AUJOURD HUI|PRECEDENTE?|COURANTE?|ECOULEE?)\b|"
-        r"\b(14|30|22|6)\b",
-        text,
-    ))
+def _has_recency_cue(text: str) -> bool:
+    return bool(re.search(r"\b(DERNIERS?|DERNIERES?|RECENTS?|RECENTES?|RECEMMENT)\b", text))
 
 
-def _has_action_cue(text: str) -> bool:
-    return bool(re.search(
-        r"\b(EFFAC|SUPPR|RAYE|DETRUIT|DROIT|PRIVILEGE|AUTORISATION|HABILITATION|"
-        r"REVOQU|ANNULE|PURG|VIDE|ZERO|SESSION|CONNEX|AUTHENT|LOGIN|LOGON|"
-        r"CONSULT|LECTURE|MODIFI|CHANGE|AJOUT|INSER|CREATE|DROP|ALTER|GRANT|"
-        r"REVOKE|TRUNCATE|SELECT|UPDATE|DELETE)\w*\b",
-        text,
-    ))
+def _model_aggregate_is_supported(aggregate: str | None, text: str) -> bool:
+    if aggregate == "latest_users":
+        return _has_recency_cue(text)
+    if aggregate == "count_distinct_user":
+        return bool(re.search(r"\b(COMBIEN|NOMBRE|TOTAL)\b", text))
+    if aggregate == "compare":
+        return bool(re.search(r"\b(COMPARE|COMPARER|COMPARAISON|PARALLELE|DIFFERENCE)\b", text))
+    if aggregate in {"top_action", "top_host", "top_user", "top_objects"}:
+        if aggregate == "top_user" and _has_recency_cue(text):
+            return False
+        return bool(re.search(
+            r"\b(PLUS|MAXIMUM|MAX|DOMINANTE|FREQUENTE|CLASSEMENT|PREMIER|NUMERO UN)\b",
+            text,
+        ))
+    return aggregate is None
 
-
-def _has_aggregate_cue(text: str) -> bool:
-    return bool(re.search(
-        r"\b(COMBIEN|NOMBRE|TOTAL|PLUS|MAXIMUM|MAX|DOMINANTE|FREQUENTE|"
-        r"CLASSEMENT|PREMIER|NUMERO UN|COMPARE)\b",
-        text,
-    ))
 
 def _is_mutation_order(text: str) -> bool:
     return bool(re.match(
         r"^(SUPPRIME|SUPPRIMER|EFFACE|EFFACER|VIDE|VIDER|TRONQUE|TRUNCATE|"
-        r"METS|METTRE|REMETS|REMETTRE|REINITIALISE|REINITIALISER|PURGE|PURGER|"
-        r"MODIFIE|MODIFIER|INSERE|INSERER|ACCORDE|REVOQUE)\b",
+        r"METS\s+A\s+JOUR|METTRE\s+A\s+JOUR|REMETS|REMETTRE|"
+        r"REINITIALISE|REINITIALISER|PURGE|PURGER|"
+        r"MODIFIE|MODIFIER|INSERE|INSERER|ACCORDE|REVOQUE|DROP|CREATE|ALTER|"
+        r"GRANT|REVOKE|DELETE|UPDATE|INSERT)\b",
         text,
     ))
 
@@ -276,54 +289,132 @@ def normalize_intent(
     known_objects: Iterable[str],
 ) -> dict[str, Any]:
     text = _norm(question)
-    users = _catalog_matches(text, known_users)
-    objects = _catalog_matches(text, known_objects)
-    actions = _detect_actions(text)
-    period = _detect_period(text)
-    aggregate, aggregate_limit = _detect_aggregate(text)
-    requested_limit = _detect_requested_limit(text)
-    limit = requested_limit
-    if limit is None and aggregate == "top_objects":
-        limit = aggregate_limit
+    known_user_set = {
+        str(value).strip().upper().replace(" ", "_") for value in known_users
+    }
+    known_object_set = {
+        str(value).strip().upper() for value in known_objects
+    }
 
-    # Preserve a model classification only where deterministic language has no stronger signal.
-    status = str(raw_intent.get("status") or "query").lower()
-    clarification: str | None = None
+    explicit_users = _catalog_matches(text, known_user_set)
+    explicit_objects = _catalog_matches(text, known_object_set)
+    # Les noms propres doivent être présents dans la question et dans le catalogue.
+    # Le modèle ne peut donc pas ajouter un compte ou un objet seulement parce qu'il existe.
+    users = explicit_users
+    objects = explicit_objects
+
+    evidence = raw_intent.get("evidence")
+    if isinstance(evidence, Mapping):
+        raw_action_evidence = evidence.get("actions") or []
+    elif isinstance(evidence, list):
+        raw_action_evidence = evidence
+    else:
+        raw_action_evidence = []
+    if isinstance(raw_action_evidence, str):
+        raw_action_evidence = [raw_action_evidence]
+    grounded_evidence = [
+        normalized
+        for value in raw_action_evidence
+        if (normalized := _norm(str(value))) and normalized in text
+    ]
+    action_evidence_is_grounded = bool(grounded_evidence)
+
+    explicit_actions = _detect_actions(text)
+    model_actions = list(dict.fromkeys(
+        str(value).strip().upper()
+        for value in (raw_intent.get("actions") or [])
+        if str(value).strip().upper() in ALLOWED_ACTIONS
+    ))
+    # Une question normale combine peu d'actions. Une longue énumération produite
+    # par le petit modèle est traitée comme « toutes les actions », donc sans filtre.
+    tentative_model_actions = (
+        model_actions
+        if not explicit_actions and action_evidence_is_grounded and 0 < len(model_actions) <= 4
+        else []
+    )
+    actions = explicit_actions or tentative_model_actions
+
+    explicit_period = _detect_period(text)
+    model_period = raw_intent.get("period")
+    if model_period == "null":
+        model_period = None
+    period = explicit_period
+    if period is None and model_period in ALLOWED_PERIODS:
+        period = model_period
+
+    explicit_aggregate, _ = _detect_aggregate(text)
+    model_aggregate = raw_intent.get("aggregate")
+    if model_aggregate == "null":
+        model_aggregate = None
+    aggregate = explicit_aggregate
+    if aggregate is None and model_aggregate in ALLOWED_AGGREGATES:
+        if model_aggregate == "top_user" and _has_recency_cue(text):
+            aggregate = "latest_users"
+        elif _model_aggregate_is_supported(model_aggregate, text):
+            aggregate = model_aggregate
+    if period == "compare_today_yesterday":
+        aggregate = "compare"
+
+    requested_limit = _detect_requested_limit(text)
+    model_limit: int | None = None
+    try:
+        if raw_intent.get("limit") not in (None, "", "null"):
+            model_limit = max(1, min(200, int(raw_intent["limit"])))
+    except (TypeError, ValueError):
+        model_limit = None
+    evidence_has_quantity = any(re.search(
+        r"\b(\d{1,3}|UN|UNE|DEUX|TROIS|QUATRE|CINQ|SIX|SEPT|HUIT|NEUF|DIX|"
+        r"DERNIER|DERNIERE|PREMIER|PREMIERE)\b",
+        value,
+    ) for value in grounded_evidence)
+    limit = requested_limit
+    if limit is None and model_limit is not None and evidence_has_quantity:
+        limit = model_limit
+    if (
+        limit is None
+        and aggregate == "latest_users"
+        and re.match(r"^(QUI\s+EST|QUEL|QUELLE)\b", text)
+    ):
+        limit = 1
+    if limit is None and aggregate == "top_objects":
+        limit = 5
+
+    model_status = str(raw_intent.get("status") or "query").strip().lower()
+    if model_status not in {"query", "clarification", "refusal"}:
+        model_status = "query"
+    status = "query"
+    clarification = str(raw_intent.get("clarification") or "").strip() or None
+
     if _is_mutation_order(text):
         status = "refusal"
         clarification = "Je peux consulter les journaux d'audit, mais pas modifier la base."
         actions = []
     elif _needs_clarification(text):
         status = "clarification"
-        clarification = str(raw_intent.get("clarification") or "").strip() or (
+        clarification = clarification or (
             "Précisez l'action, l'objet ou la date exacte à examiner."
+        )
+    elif tentative_model_actions:
+        status = "clarification"
+        actions = []
+        clarification = (
+            "L'action demandée reste incertaine. Précisez s'il s'agit d'un ajout, "
+            "d'une modification, d'une consultation, d'une suppression ou d'une autre opération."
+        )
+    elif model_status == "clarification":
+        status = "clarification"
+        clarification = clarification or (
+            "Précisez l'utilisateur, l'objet, l'action ou la période à examiner."
         )
     else:
         status = "query"
+        clarification = None
 
-    failed_only = bool(re.search(r"\b(RATEES?|ECHOUES?|ECHECS?|ERREURS?|REFUSEES?|REJETEES?)\b", text))
-    if status == "query" and not actions:
-        raw_actions = list(dict.fromkeys(
-            str(value).strip().upper()
-            for value in (raw_intent.get("actions") or [])
-            if str(value).strip().upper() in ALLOWED_ACTIONS
-        ))
-        if _has_action_cue(text) and 0 < len(raw_actions) <= 2:
-            actions = raw_actions
-
-    if aggregate is None:
-        raw_aggregate = raw_intent.get("aggregate")
-        if (
-            _has_aggregate_cue(text)
-            and raw_aggregate in ALLOWED_AGGREGATES
-            and raw_aggregate is not None
-        ):
-            aggregate = raw_aggregate
-    raw_period = raw_intent.get("period")
-    if raw_period == "null":
-        raw_period = None
-    if period is None and _has_time_cue(text) and raw_period in ALLOWED_PERIODS:
-        period = raw_period
+    explicit_failure = bool(re.search(
+        r"\b(RATEES?|ECHOUES?|ECHECS?|ERREURS?|REFUSEES?|REJETEES?)\b",
+        text,
+    ))
+    failed_only = explicit_failure or bool(raw_intent.get("failed_only"))
 
     if status != "query":
         aggregate = None

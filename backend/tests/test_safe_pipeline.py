@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 from app.services.intent_policy import normalize_intent
 from app.services.local_model_service import build_local_synthesis
-from app.services.safe_sql_builder import UnsafeIntentError, build_safe_audit_query
+from app.services.safe_sql_builder import ALLOWED_ACTIONS, UnsafeIntentError, build_safe_audit_query
 
 
 USERS = ["CYRILLE", "SYSTEM", "REPORT_USER", "NICOLAS"]
@@ -26,6 +26,81 @@ class IntentPolicyTests(unittest.TestCase):
         self.assertEqual(intent["actions"], ["DELETE"])
         self.assertEqual(intent["period"], "yesterday")
 
+    def test_overbroad_model_actions_are_collapsed_but_semantics_remain(self) -> None:
+        intent = normalize_intent(
+            "qui est la derniere persone a effectuer une action en base",
+            {
+                "status": "query",
+                "actions": sorted(action for action in ALLOWED_ACTIONS),
+                "aggregate": "latest_users",
+                "limit": 1,
+                "evidence": ["derniere persone"],
+            },
+            USERS,
+            OBJECTS,
+        )
+        self.assertEqual(intent["actions"], [])
+        self.assertEqual(intent["aggregate"], "latest_users")
+        self.assertEqual(intent["limit"], 1)
+
+    def test_recency_corrects_model_frequency_confusion(self) -> None:
+        intent = normalize_intent(
+            "donne moi les deux comptes les plus recemment actifs",
+            {
+                "status": "query",
+                "aggregate": "top_user",
+                "limit": 2,
+                "evidence": ["deux comptes", "plus recemment actifs"],
+            },
+            USERS,
+            OBJECTS,
+        )
+        self.assertEqual(intent["aggregate"], "latest_users")
+        self.assertEqual(intent["limit"], 2)
+
+    def test_comparison_wording_is_not_treated_as_mutation(self) -> None:
+        intent = normalize_intent(
+            "mets en parallele ce qui s'est passe hier et aujourd'hui",
+            {"status": "refusal", "period": "compare_today_yesterday"},
+            USERS,
+            OBJECTS,
+        )
+        self.assertEqual(intent["status"], "query")
+        self.assertEqual(intent["period"], "compare_today_yesterday")
+        self.assertEqual(intent["aggregate"], "compare")
+
+    def test_unsupported_model_aggregate_and_limit_are_rejected(self) -> None:
+        intent = normalize_intent(
+            "que sest il passe aujourdhui ?",
+            {
+                "status": "query",
+                "period": "today",
+                "aggregate": "count_distinct_user",
+                "limit": 200,
+                "evidence": ["aujourdhui"],
+            },
+            USERS,
+            OBJECTS,
+        )
+        self.assertEqual(intent["period"], "today")
+        self.assertIsNone(intent["aggregate"])
+        self.assertIsNone(intent["limit"])
+
+    def test_unrequested_top_objects_limit_uses_domain_default(self) -> None:
+        intent = normalize_intent(
+            "quelles ressources ont ete les plus lues ?",
+            {
+                "status": "query",
+                "aggregate": "top_objects",
+                "limit": 200,
+                "evidence": ["ressources", "plus lues"],
+            },
+            USERS,
+            OBJECTS,
+        )
+        self.assertEqual(intent["aggregate"], "top_objects")
+        self.assertEqual(intent["limit"], 5)
+
     def test_mutation_order_is_refused(self) -> None:
         intent = normalize_intent(
             "Supprime toutes les lignes de CLIENT",
@@ -42,6 +117,21 @@ class IntentPolicyTests(unittest.TestCase):
         intent = normalize_intent("Qui a fait ça hier ?", {}, USERS, OBJECTS)
         self.assertEqual(intent["status"], "clarification")
         self.assertEqual(intent["period"], "yesterday")
+
+    def test_direct_sql_mutation_is_refused(self) -> None:
+        intent = normalize_intent("DROP TABLE CLIENT", {"status": "query"}, USERS, OBJECTS)
+        self.assertEqual(intent["status"], "refusal")
+        self.assertEqual(intent["actions"], [])
+
+    def test_model_refusal_cannot_block_an_explicit_audit_aggregate(self) -> None:
+        intent = normalize_intent(
+            "Quelle action est la plus fréquente ?",
+            {"status": "refusal", "aggregate": "top_action"},
+            USERS,
+            OBJECTS,
+        )
+        self.assertEqual(intent["status"], "query")
+        self.assertEqual(intent["aggregate"], "top_action")
 
     def test_purge_order_is_refused(self) -> None:
         intent = normalize_intent("Purge immédiatement CLIENT", {}, USERS, OBJECTS)
@@ -88,6 +178,58 @@ class IntentPolicyTests(unittest.TestCase):
             with self.subTest(question=question):
                 intent = normalize_intent(question, {}, USERS, OBJECTS)
                 self.assertIn(expected, intent["actions"])
+
+    def test_model_semantics_are_accepted_for_unseen_person_wording(self) -> None:
+        intent = normalize_intent(
+            "qui est la derniere persone a effectuer une action en base",
+            {
+                "status": "query",
+                "users": [],
+                "objects": [],
+                "actions": [],
+                "period": None,
+                "aggregate": "latest_users",
+                "failed_only": False,
+                "limit": None,
+            },
+            USERS,
+            OBJECTS,
+        )
+        self.assertEqual(intent["aggregate"], "latest_users")
+        self.assertEqual(intent["limit"], 1)
+
+    def test_ranked_quantity_does_not_depend_on_the_noun(self) -> None:
+        intent = normalize_intent(
+            "donne moi les deux comptes les plus recemment actifs",
+            {"status": "query", "aggregate": "top_user"},
+            USERS,
+            OBJECTS,
+        )
+        self.assertEqual(intent["aggregate"], "latest_users")
+        self.assertEqual(intent["limit"], 2)
+
+    def test_generic_article_is_not_mistaken_for_result_count(self) -> None:
+        intent = normalize_intent(
+            "une personne a effectué une action en base",
+            {}, USERS, OBJECTS,
+        )
+        self.assertIsNone(intent["limit"])
+
+    def test_model_only_action_paraphrase_requests_clarification(self) -> None:
+        intent = normalize_intent(
+            "qui a alimenté CLIENT ?",
+            {
+                "status": "query",
+                "actions": ["INSERT"],
+                "evidence": ["alimenté", "CLIENT"],
+            },
+            USERS,
+            OBJECTS,
+        )
+        self.assertEqual(intent["status"], "clarification")
+        self.assertEqual(intent["actions"], [])
+        self.assertEqual(intent["objects"], ["CLIENT"])
+        self.assertIn("action demandée reste incertaine", intent["clarification"])
 
     def test_hallucinated_entities_are_removed(self) -> None:
         intent = normalize_intent(

@@ -6,7 +6,7 @@ import re
 import unicodedata
 import urllib.request
 from datetime import date, datetime
-from typing import Any, Iterable
+from typing import Any, Iterable, Mapping
 
 from app.services.intent_policy import normalize_intent
 
@@ -15,20 +15,28 @@ MODEL_URL = os.getenv("AUDITAI_MODEL_URL", "http://127.0.0.1:8080/v1/chat/comple
 MODEL_HEALTH_URL = os.getenv("AUDITAI_MODEL_HEALTH_URL", "http://127.0.0.1:8080/health")
 MODEL_TIMEOUT_SECONDS = int(os.getenv("AUDITAI_MODEL_TIMEOUT_SECONDS", "120"))
 
-_INTENT_PROMPT = """Tu extrais une intention de lecture des journaux d'audit Oracle.
-Réponds uniquement par un objet JSON, sans SQL ni explication:
-{"status":"query|clarification|refusal","users":[],"objects":[],"actions":[],
-"period":null,"aggregate":null,"failed_only":false,"limit":null,"clarification":null}
-N'invente aucune entité. Une liste vide signifie tous.
-Limit est un nombre seulement si l'utilisateur demande explicitement un nombre de résultats, sinon null.
-Périodes: today, yesterday, last_friday, range_weekdays, last_14_days, night_range,
-this_week, this_month, last_30_days, compare_today_yesterday ou null.
-Agrégats: count_distinct_user, top_action, compare, top_host, top_user, top_objects, latest_users ou null.
-Actions: LOGON, LOGOFF, SELECT, INSERT, UPDATE, DELETE, GRANT, REVOKE, ALTER, TRUNCATE,
-CREATE USER, DROP USER, ALTER USER, CREATE TABLE, DROP TABLE, ALTER TABLE.
-Une question sur une suppression ou un droit est une consultation d'audit.
-Un ordre réel de modifier les données est refusal.
-Une référence inexploitable ou une date ambiguë est clarification."""
+_INTENT_PROMPT = """Tu comprends les questions d'utilisateurs non informaticiens sur un journal d'audit Oracle.
+Ne produis jamais de SQL. Réponds uniquement avec ce JSON :
+{"status":"query|clarification|refusal","users":[],"objects":[],"actions":[],"period":null,"aggregate":null,"failed_only":false,"limit":null,"clarification":null,"evidence":[]}
+
+Traduis le sens, même avec des synonymes ou des fautes :
+- users et objects : seulement les noms cités ; ne les invente jamais.
+- actions : seulement les opérations précises demandées. « une action », « activité » ou « ce qui s'est passé » signifie toutes les actions : []. Ne recopie jamais toute la liste autorisée.
+- limit : quantité demandée ; dernier/dernière au singulier = 1 ; sinon null.
+- latest_users : personnes, auteurs, acteurs, comptes ou utilisateurs ayant agi le plus récemment.
+- top_user : utilisateur ayant le plus d'événements. top_objects : objets les plus actifs. top_action : action la plus fréquente.
+- count_distinct_user : nombre d'utilisateurs différents. compare : aujourd'hui contre hier.
+- failed_only : true uniquement pour échec, refus ou erreur.
+- consulter une suppression ou un droit = query ; ordonner une modification réelle = refusal ; référence inexploitable = clarification.
+- evidence recopie quelques mots exacts de la question justifiant les champs sémantiques non vides.
+
+Périodes : today, yesterday, last_friday, range_weekdays, last_14_days, night_range, this_week, this_month, last_30_days, compare_today_yesterday.
+Agrégats : count_distinct_user, top_action, compare, top_host, top_user, top_objects, latest_users.
+Actions : LOGON, LOGOFF, SELECT, INSERT, UPDATE, DELETE, GRANT, REVOKE, ALTER, TRUNCATE, CREATE USER, DROP USER, ALTER USER, CREATE TABLE, DROP TABLE, ALTER TABLE.
+
+Exemples :
+« qui est la dernière personne à avoir agi ? » => {"status":"query","users":[],"objects":[],"actions":[],"period":null,"aggregate":"latest_users","failed_only":false,"limit":1,"clarification":null,"evidence":["dernière personne"]}
+« qui a supprimé CLIENT hier ? » => {"status":"query","users":[],"objects":["CLIENT"],"actions":["DELETE"],"period":"yesterday","aggregate":null,"failed_only":false,"limit":null,"clarification":null,"evidence":["supprimé","CLIENT","hier"]}"""
 
 _SYNTHESIS_PROMPT = """Tu expliques un résultat d'audit Oracle à une personne non informaticienne.
 Réponds en français, directement, en 1 à 5 phrases, avec une formulation naturelle adaptée à la question.
@@ -114,7 +122,7 @@ def interpret_question(
     raw_intent: dict[str, Any] = {}
     model_error: str | None = None
     try:
-        content = _chat(_INTENT_PROMPT, question, max_tokens=220, json_mode=True)
+        content = _chat(_INTENT_PROMPT, question, max_tokens=180, json_mode=True)
         parsed = json.loads(content)
         if isinstance(parsed, dict):
             raw_intent = parsed
@@ -125,7 +133,9 @@ def interpret_question(
     return normalize_intent(question, raw_intent, known_users, known_objects), model_error
 
 
-def _is_latest_user_question(question: str) -> bool:
+def _is_latest_user_question(question: str, intent: Mapping[str, Any] | None = None) -> bool:
+    if intent and intent.get("aggregate") == "latest_users":
+        return True
     normalized = unicodedata.normalize("NFKD", question)
     normalized = "".join(char for char in normalized if not unicodedata.combining(char)).upper()
     return bool(
@@ -138,6 +148,7 @@ def _rule_synthesis(
     rows: list[dict[str, Any]],
     error: str | None = None,
     question: str = "",
+    intent: Mapping[str, Any] | None = None,
 ) -> str:
     if error:
         return "La recherche n'a pas abouti. Vérifiez la connexion locale puis reformulez la demande."
@@ -184,7 +195,7 @@ def _rule_synthesis(
             detail += f" depuis {row['USERHOST']}"
         if row.get("RETURNCODE") not in (None, 0, "0"):
             detail += f", avec le code d'échec {row['RETURNCODE']}"
-        if _is_latest_user_question(question) and row.get("DBUSERNAME"):
+        if _is_latest_user_question(question, intent) and row.get("DBUSERNAME"):
             return f"Le dernier utilisateur correspondant est {row['DBUSERNAME']}. {detail}."
         return f"Un événement correspond à la demande. {detail}."
     if len(rows) <= 3:
@@ -221,7 +232,7 @@ def _rule_synthesis(
             descriptions.append(detail)
 
         count_label = "Deux" if len(rows) == 2 else "Trois"
-        if _is_latest_user_question(question):
+        if _is_latest_user_question(question, intent):
             return f"Voici les {count_label.lower()} derniers utilisateurs concernés. " + ". ".join(descriptions) + "."
         return f"{count_label} événements correspondent à la demande. " + ". ".join(descriptions) + "."
     normalized_rows = [
@@ -262,9 +273,14 @@ def _generated_synthesis_is_acceptable(answer: str) -> bool:
     )
 
 
-def build_local_synthesis(question: str, rows: list[dict[str, Any]], error: str | None) -> str:
+def build_local_synthesis(
+    question: str,
+    rows: list[dict[str, Any]],
+    error: str | None,
+    intent: Mapping[str, Any] | None = None,
+) -> str:
     if error or not rows or len(rows) <= 3:
-        return _rule_synthesis(rows, error, question)
+        return _rule_synthesis(rows, error, question, intent)
     compact_rows = rows[:25]
     user_content = (
         f"Question: {question}\n"
@@ -276,7 +292,7 @@ def build_local_synthesis(question: str, rows: list[dict[str, Any]], error: str 
         answer = _chat(_SYNTHESIS_PROMPT, user_content[:5000], max_tokens=180)
         if _generated_synthesis_is_acceptable(answer):
             return answer
-        return _rule_synthesis(rows, error, question)
+        return _rule_synthesis(rows, error, question, intent)
     except Exception:
-        return _rule_synthesis(rows, error, question)
+        return _rule_synthesis(rows, error, question, intent)
 

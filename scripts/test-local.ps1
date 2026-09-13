@@ -60,6 +60,13 @@ if ($short.row_count -ne 1 -or $short.rows.Count -ne 1 -or $short.sql -notmatch 
     throw "La limite ou la synthèse courte n'est pas correcte."
 }
 
+$semanticBody = @{ question = "qui est la derniere persone a effectuer une action en base" } | ConvertTo-Json
+$semanticBytes = [Text.Encoding]::UTF8.GetBytes($semanticBody)
+$semantic = Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:8000/api/query" -Headers $headers -ContentType "application/json; charset=utf-8" -Body $semanticBytes
+if ($semantic.intent_status -ne "query" -or $semantic.row_count -ne 1 -or $semantic.sql -notmatch "PARTITION BY UPPER\(DBUSERNAME\)" -or $semantic.sql -notmatch "FETCH FIRST 1 ROWS ONLY" -or $semantic.synthesis -notmatch "dernier utilisateur") {
+    throw "La compréhension sémantique de la dernière personne n'est pas correcte."
+}
+
 $history = Invoke-RestMethod -Uri "http://127.0.0.1:8000/api/history" -Headers $headers
 $lastHistory = $history | Select-Object -Last 1
 if (-not $lastHistory -or -not $lastHistory.synthesis -or $lastHistory.rows.Count -ne 1) {
@@ -78,6 +85,7 @@ if (-not $lastHistory -or -not $lastHistory.synthesis -or $lastHistory.rows.Coun
     clarification = $ambiguous.intent_status
     destructive_request = $refusal.intent_status
     short_result_rows = $short.row_count
+    semantic_latest_user_rows = $semantic.row_count
     history_result_rows = $lastHistory.rows.Count
 } | Format-List
 

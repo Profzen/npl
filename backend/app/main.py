@@ -391,7 +391,7 @@ def _execute_query_pipeline(req: QueryRequest, username: str, request_id: str | 
             "Precisez l'utilisateur, l'objet, l'action ou la periode a examiner."
         ))
     else:
-        synthesis = build_local_synthesis(req.question, rows, error)
+        synthesis = build_local_synthesis(req.question, rows, error, intent)
     t_syn_end = time.perf_counter()
 
     if request_id is not None:

@@ -1053,3 +1053,79 @@ Après cette correction, la question sur les retraits de droits répond : « Pou
 ### Interprétation du caractère intelligent
 
 Dans ce projet, l'intelligence ne signifie pas laisser le modèle inventer librement le SQL. Elle correspond à sa capacité à interpréter des formulations variées, combinée à une représentation explicite du domaine et à des contrôles qui garantissent que la requête et la réponse restent fidèles. Cette architecture peut traiter des phrases jamais vues lorsqu'elles expriment un concept connu, tout en demandant une reformulation lorsqu'aucune interprétation sûre ne peut être établie. Le score de généralisation officiel reste 89,1 % sur le premier corpus aveugle v3 ; les nouveaux tests mesurent la non-régression de ce lot et ne remplacent pas cette mesure.
+
+## 26. Rééquilibrage entre compréhension Qwen et contrôles déterministes — 13 septembre 2026
+
+### Point de restauration préalable
+
+Avant ce lot, la branche `master` locale était synchronisée avec `origin/master` au commit `b3517e5`. Un `git push origin master` a confirmé `Everything up-to-date`. Ce commit constitue le point de restauration demandé avant la modification de l'architecture d'interprétation.
+
+### Expérience ayant motivé le changement
+
+La question « qui est la derniere persone a effectuer une action en base » produisait visuellement un SQL correct : tri décroissant sur `EVENT_TIMESTAMP` et une seule ligne. Un appel direct au modèle a cependant montré que Qwen n'avait pas correctement construit l'intention : il renvoyait toutes les actions autorisées, aucun agrégat et aucune limite. La normalisation supprimait la liste d'actions injustifiée et interprétait accidentellement « une action » comme une quantité de un. La bonne réponse finale ne prouvait donc pas une bonne compréhension du modèle.
+
+Cette observation a conduit à distinguer explicitement trois responsabilités : Qwen détermine le sens global ; la politique d'intention contrôle la cohérence et l'ancrage ; le constructeur SQL produit exclusivement une lecture Oracle sûre. La couche déterministe ne doit pas remplacer systématiquement le raisonnement linguistique, mais elle doit empêcher une valeur inventée ou incohérente d'atteindre Oracle.
+
+### Nouveau contrat d'intention de Qwen
+
+Le prompt système présente maintenant Qwen comme le moteur de compréhension d'un assistant d'audit Oracle destiné à des utilisateurs non informaticiens. Il lui interdit de produire du SQL et définit le sens de chaque champ JSON. Il précise notamment que :
+
+- `latest_users` représente les personnes, auteurs, acteurs, comptes ou utilisateurs ayant agi le plus récemment ;
+- `top_user` représente l'utilisateur ayant le plus grand nombre d'événements et ne doit pas être confondu avec le plus récent ;
+- une « action », une « activité » ou « ce qui s'est passé » sans opération précise signifie toutes les actions et doit produire une liste vide ;
+- une forme singulière comme « la dernière » demande une seule réponse ;
+- les noms d'utilisateurs et d'objets ne doivent pas être inventés ;
+- une consultation portant sur DELETE, GRANT ou une autre opération reste une question d'audit, tandis qu'un ordre réel de modification doit être refusé ;
+- le champ `evidence` recopie des mots de la question afin d'ancrer les interprétations indirectes.
+
+Le prompt initialement détaillé atteignait environ 1 052 tokens et entraînait un temps de traitement observé de 73,5 secondes sur le CPU local. Il a été condensé tout en conservant le contrat, les valeurs autorisées et deux exemples structurants. La sortie maximale d'intention a également été ramenée à 180 tokens. Cette réduction évite de consacrer une grande partie du temps d'inférence à relire des instructions trop longues.
+
+### Nouvelle répartition des décisions
+
+La normalisation accepte désormais les périodes, agrégats et quantités proposés par Qwen lorsqu'ils sont autorisés et cohérents avec les opérateurs présents dans la question. Une décision de récence peut donc venir du modèle même si le nom utilisé, par exemple « individu », n'est pas inscrit dans une liste de synonymes déterministe.
+
+Les noms propres gardent une validation plus stricte : un utilisateur ou un objet doit apparaître dans la question et dans le catalogue Oracle. Le fait qu'un compte existe dans le catalogue ne suffit pas à autoriser Qwen à l'ajouter. Une liste anormalement large d'actions produite par le petit modèle est ramenée à l'absence de filtre, car elle correspond à une demande portant sur toute activité et ne doit pas générer seize paramètres inutiles.
+
+Une action précise inférée uniquement à partir d'une paraphrase éloignée est considérée comme tentative. Avec le modèle 1,5B, « alimenté CLIENT » a été interprété comme SELECT alors qu'INSERT ou UPDATE seraient également plausibles. Le système n'exécute plus cette requête approximative : il demande si l'utilisateur parle d'un ajout, d'une modification, d'une consultation, d'une suppression ou d'une autre opération. Cette clarification protège la justesse sans créer une règle spécifique pour le verbe « alimenter ».
+
+### Validation générale des opérateurs
+
+La politique vérifie les concepts abstraits plutôt que des questions complètes :
+
+- récence pour distinguer dernier utilisateur et utilisateur le plus actif ;
+- fréquence ou maximum pour les classements ;
+- comptage pour `count_distinct_user` ;
+- comparaison pour `compare` ;
+- quantité explicite pour empêcher une limite de 200 inventée.
+
+Une quantité associée à un classement est reconnue indépendamment du nom qui suit. « Deux comptes les plus récemment actifs » et « cinq éléments les plus fréquents » utilisent ainsi une règle grammaticale commune. De même, « le dernier » et « la dernière » imposent un résultat quel que soit le nom employé. L'article indéfini de « une action » n'est plus pris automatiquement pour une quantité de résultat.
+
+Lorsque Qwen confond `top_user` avec `latest_users` alors que la question exprime clairement la récence, la cohérence sémantique corrige l'opérateur. Une agrégation de comptage proposée sans indication de nombre ou de total est rejetée. Une limite produite par le modèle sans quantité ancrée dans la question est rejetée. Le classement `top_objects` utilise cinq résultats par défaut lorsqu'aucune quantité n'est demandée.
+
+### Statuts et sécurité
+
+Un faux statut `refusal` de Qwen ne peut plus bloquer une question d'audit explicite telle que « Quelle action est la plus fréquente ? ». Dans cet essai, Qwen avait retourné `refusal` avec `top_action`; la politique conserve maintenant l'agrégation légitime.
+
+La sécurité contre les modifications ne dépend pas de ce statut du modèle. Les ordres commençant par des verbes de mutation français ou par DROP, CREATE, ALTER, GRANT, REVOKE, DELETE, UPDATE ou INSERT sont refusés de manière déterministe. Même en cas d'erreur de classification, le modèle ne génère jamais le SQL, le constructeur vise une table d'audit fixe, n'émet que SELECT, lie les paramètres, limite les résultats et utilise un compte Oracle lecteur.
+
+L'expression « mets en parallèle hier et aujourd'hui » n'est plus confondue avec « mets à jour ». Elle produit la période `compare_today_yesterday` et l'agrégat `compare`. Cette correction évite qu'une règle de refus trop large bloque une demande analytique normale.
+
+### Transmission de l'intention à la synthèse
+
+L'intention normalisée est maintenant transmise à la synthèse. Les réponses déterministes courtes savent donc que le résultat correspond à `latest_users`, même lorsque la question emploie « personne » ou « individu ». Elles répondent directement « Le dernier utilisateur correspondant est … » au lieu d'utiliser une phrase générique sur un événement.
+
+### Résultats vérifiés
+
+Après redémarrage, les formulations suivantes ont été exécutées avec succès :
+
+- « qui est la derniere persone a effectuer une action en base » : `latest_users`, limite 1, SQL analytique partitionné par `DBUSERNAME`, une ligne et réponse directe sur CYRILLE_TBS ;
+- « quel individu a agi le plus recemment ? » : même intention, même limite et même résultat sans ajout manuel du mot « individu » dans la politique ;
+- « qui a alimenté CLIENT ? » : statut clarification, aucun SQL exécuté et demande de précision sur l'action.
+
+Une évaluation sémantique distincte de huit formulations non présentes dans les deux exemples du prompt a été exécutée. Le premier passage strict a obtenu 7/8, la quantité deux étant perdue dans « deux comptes les plus récemment actifs ». Après généralisation grammaticale de la quantité, le même lot obtient 8/8 : individu récent, deux comptes récents, comptage de personnes différentes, comparaison formulée « en parallèle », machine avec le plus d'échecs, ressources les plus lues, période « aujourdhui » sans apostrophe et clarification de « alimenté CLIENT ».
+
+La suite unitaire comprend maintenant 35 tests, tous réussis. Le test local de bout en bout vérifie désormais également la question exacte sur la dernière personne et exige : statut query, une ligne, partition analytique par utilisateur, `FETCH FIRST 1 ROWS ONLY` et synthèse désignant le dernier utilisateur. Le dernier passage confirme API OK, Oracle connected, modèle loaded, frontend HTTP 200, neuf utilisateurs, quatorze objets, secret masqué, agrégation, clarification, refus destructeur, résultat court, compréhension sémantique et historique.
+
+### Limites scientifiques
+
+Le résultat 8/8 caractérise seulement ce lot ciblé de reformulations et sert de validation technique du rééquilibrage. Il ne remplace pas le score de généralisation officiel de 89,1 % obtenu au premier passage du corpus aveugle v3. Le modèle actif reste Qwen2.5-Coder-1.5B-Instruct Q4_K_M. Les essais montrent qu'il peut comprendre des formulations nouvelles avec un meilleur contrat d'intention, mais aussi qu'il reste sujet aux confusions et aux sorties irrégulières. Un modèle plus grand devra être comparé lorsque 16 Go de RAM physique seront disponibles ; en attendant, les ambiguïtés non résolues doivent conduire à une clarification plutôt qu'à une requête approximative.
