@@ -421,7 +421,7 @@ export default function HomePage() {
                             <table className="min-w-full text-xs">
                               <thead className="sticky top-0 bg-foreground/5">
                                 <tr className="border-b-2 border-foreground/20">
-                                  {Object.keys(result.rows[0]).map((key) => (
+                                  {Object.keys(result.rows[0]).filter((key) => key !== "CLIENT_PROGRAM_NAME").map((key) => (
                                     <th key={key} className="text-left font-bold p-1.5 text-xs text-foreground uppercase tracking-wider">
                                       {toFriendlyColumnName(key, lang)}
                                     </th>
@@ -431,8 +431,8 @@ export default function HomePage() {
                               <tbody>
                                 {result.rows.map((row, i) => (
                                   <tr key={i} className={cn("border-b border-foreground/10 hover:bg-primary/5", i % 2 === 0 ? "bg-foreground/[0.02]" : "")}> 
-                                    {Object.values(row).map((value, j) => (
-                                      <td key={j} className="p-1.5 text-xs text-foreground">{String(value ?? "-")}</td>
+                                    {Object.keys(result.rows[0]).filter((key) => key !== "CLIENT_PROGRAM_NAME").map((key, j) => (
+                                      <td key={j} className="p-1.5 text-xs text-foreground">{String(row[key] ?? "-")}</td>
                                     ))}
                                   </tr>
                                 ))}

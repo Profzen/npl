@@ -200,7 +200,7 @@ export default function HistoryPage() {
                             <table className="w-full text-sm">
                               <thead>
                                 <tr className="border-b border-border">
-                                  {Object.keys(selectedEntry.rows[0]).map((key) => (
+                                  {Object.keys(selectedEntry.rows[0]).filter((key) => key !== "CLIENT_PROGRAM_NAME").map((key) => (
                                     <th
                                       key={key}
                                       className="text-left font-medium p-2 text-xs text-muted-foreground uppercase tracking-wider"
@@ -213,9 +213,9 @@ export default function HistoryPage() {
                               <tbody>
                                 {selectedEntry.rows.slice(0, 10).map((row, i) => (
                                   <tr key={i} className="border-b border-border/50">
-                                    {Object.values(row).map((value, j) => (
+                                    {Object.keys(selectedEntry.rows[0]).filter((key) => key !== "CLIENT_PROGRAM_NAME").map((key, j) => (
                                       <td key={j} className="p-2 font-mono text-xs">
-                                        {String(value ?? '-')}
+                                        {String(row[key] ?? '-')}
                                       </td>
                                     ))}
                                   </tr>

@@ -1,4 +1,4 @@
-import type {
+﻿import type {
   LoginCredentials,
   LoginResponse,
   AuthUser,
@@ -179,11 +179,12 @@ export async function submitTrackedQuery(
 export async function getHistory(): Promise<HistoryEntry[]> {
   const payload = await apiFetch<BackendHistoryEntry[]>('/history')
 
-  return payload.map((entry, index) => {
-    const ts = Number(entry.timestamp || 0)
-    const createdAt = ts > 0 ? new Date(ts * 1000).toISOString() : new Date().toISOString()
+  return payload
+    .map<HistoryEntry>((entry, index) => {
+      const ts = Number(entry.timestamp || 0)
+      const createdAt = ts > 0 ? new Date(ts * 1000).toISOString() : new Date().toISOString()
 
-    return {
+      return {
       id: `${ts || Date.now()}-${index}`,
       question: entry.question,
       sql: entry.sql,
@@ -195,9 +196,10 @@ export async function getHistory(): Promise<HistoryEntry[]> {
       clarification: entry.clarification ?? null,
       error: entry.error ?? null,
       created_at: createdAt,
-      status: entry.error ? 'error' : 'ok',
-    }
-  })
+        status: entry.error ? 'error' : 'ok',
+      }
+    })
+    .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))
 }
 
 export async function getSettings(): Promise<RuntimeSettings> {
@@ -260,3 +262,4 @@ export async function getAuditLogs(limit = 300): Promise<AuditLogEntry[]> {
     success: log.result_status === 'ok',
   }))
 }
+

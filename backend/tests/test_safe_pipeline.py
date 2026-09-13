@@ -5,6 +5,7 @@ from unittest.mock import patch
 
 from app.services.intent_policy import normalize_intent
 from app.services.local_model_service import build_local_synthesis
+from app.services.query_plan_service import normalize_query_plan
 from app.services.safe_sql_builder import ALLOWED_ACTIONS, UnsafeIntentError, build_safe_audit_query
 
 
@@ -429,6 +430,200 @@ class SynthesisTests(unittest.TestCase):
         self.assertIn("CYRILLE", answer)
         self.assertIn("SYSTEM", answer)
         self.assertNotIn("Consultez le tableau", answer)
+
+
+class GeneralQueryPlanTests(unittest.TestCase):
+    def _plan(self, **changes):
+        plan = {
+            "status": "query", "source": "events", "dimensions": [],
+            "calculation": None, "filters": [], "time": {"mode": "all"},
+            "comparison_ranges": [], "group_by": [], "order_by": [],
+            "limit": None, "response_mode": "detail", "clarification": None,
+        }
+        plan.update(changes)
+        return plan
+
+    def test_plan_validation_removes_catalog_values_not_present_in_question(self) -> None:
+        plan = normalize_query_plan(
+            "Quel compte a le moins d'opérations ?",
+            {
+                "status": "query", "source": "events",
+                "filters": [{"field": "user", "operator": "in", "value": USERS}],
+                "response_mode": "ranking",
+            },
+            USERS, OBJECTS,
+        )
+        self.assertEqual(plan["filters"], [])
+
+    def test_plan_validation_normalizes_failure_status(self) -> None:
+        plan = normalize_query_plan(
+            "Quels événements ont échoué ?",
+            {
+                "status": "query", "source": "events",
+                "filters": [{"field": "return_code", "operator": "eq", "value": "FAILURE"}],
+            },
+            USERS, OBJECTS,
+        )
+        self.assertEqual(
+            plan["filters"],
+            [{"field": "return_code", "operator": "failure", "value": None}],
+        )
+
+    def test_inconsistent_catalog_analysis_requests_clarification(self) -> None:
+        plan = normalize_query_plan(
+            "quelle est la dernière personne",
+            {
+                "status": "query", "source": "users", "response_mode": "list",
+                "order_by": [{"field": "timestamp", "direction": "desc"}],
+            },
+            USERS, OBJECTS,
+        )
+        self.assertEqual(plan["status"], "clarification")
+
+    def test_incomplete_comparison_requests_clarification(self) -> None:
+        plan = normalize_query_plan(
+            "compare les périodes",
+            {"status": "query", "source": "events", "response_mode": "comparison"},
+            USERS, OBJECTS,
+        )
+        self.assertEqual(plan["status"], "clarification")
+
+    def test_plan_validation_keeps_arbitrary_relative_period(self) -> None:
+        plan = normalize_query_plan(
+            "activité des 17 dernières heures",
+            {
+                "status": "query", "source": "events",
+                "time": {"mode": "relative_last", "unit": "hour", "value": 17},
+            },
+            USERS, OBJECTS,
+        )
+        self.assertEqual(plan["time"], {"mode": "relative_last", "unit": "hour", "value": 17})
+
+    def test_ranked_user_over_arbitrary_days_is_composable(self) -> None:
+        query = build_safe_audit_query(self._plan(
+            calculation={"operation": "count", "field": "event"},
+            time={"mode": "relative_last", "unit": "day", "value": 10},
+            group_by=["user"],
+            order_by=[{"field": "event_count", "direction": "desc"}],
+            limit=1, response_mode="ranking",
+        ), default_limit=10)
+        self.assertIn("DBUSERNAME, COUNT(*) AS EVENT_COUNT", query.sql)
+        self.assertIn("GROUP BY DBUSERNAME", query.sql)
+        self.assertIn("ORDER BY EVENT_COUNT DESC", query.sql)
+        self.assertIn("FETCH FIRST 1 ROWS ONLY", query.sql)
+        self.assertEqual(query.binds["time_value"], 10)
+
+    def test_least_user_uses_same_plan_with_ascending_order(self) -> None:
+        query = build_safe_audit_query(self._plan(
+            calculation={"operation": "count", "field": "event"},
+            time={"mode": "relative_last", "unit": "day", "value": 5},
+            group_by=["user"],
+            order_by=[{"field": "event_count", "direction": "asc"}],
+            limit=1, response_mode="ranking",
+        ))
+        self.assertIn("ORDER BY EVENT_COUNT ASC", query.sql)
+        self.assertEqual(query.binds["time_value"], 5)
+
+    def test_object_catalog_returns_only_distinct_objects(self) -> None:
+        query = build_safe_audit_query(self._plan(
+            source="objects", dimensions=["object"], response_mode="list", limit=20,
+        ))
+        self.assertIn("SELECT DISTINCT OBJECT_NAME", query.sql)
+        self.assertNotIn("DBUSERNAME", query.sql)
+        self.assertNotIn("ACTION_NAME", query.sql)
+
+    def test_relative_units_are_generic(self) -> None:
+        cases = [("minute", 45, "NUMTODSINTERVAL"), ("hour", 6, "NUMTODSINTERVAL"),
+                 ("week", 2, "NUMTODSINTERVAL"), ("month", 3, "ADD_MONTHS"),
+                 ("year", 1, "ADD_MONTHS")]
+        for unit, value, sql_fragment in cases:
+            with self.subTest(unit=unit):
+                query = build_safe_audit_query(self._plan(
+                    time={"mode": "relative_last", "unit": unit, "value": value},
+                ))
+                self.assertIn(sql_fragment, query.sql)
+
+    def test_calendar_and_explicit_periods_are_supported(self) -> None:
+        periods = [
+            {"mode": "today"}, {"mode": "yesterday"},
+            {"mode": "current", "unit": "week"},
+            {"mode": "previous", "unit": "month"},
+            {"mode": "between", "start": "2026-09-01", "end": "2026-09-10"},
+            {"mode": "before", "end": "2026-09-01"},
+            {"mode": "after", "start": "2026-08-01 12:30:00"},
+            {"mode": "previous_weekday", "weekday": "friday"},
+        ]
+        for period in periods:
+            with self.subTest(period=period):
+                query = build_safe_audit_query(self._plan(time=period))
+                self.assertIn("EVENT_TIMESTAMP", query.sql)
+
+    def test_filters_are_bound_and_never_interpolated(self) -> None:
+        query = build_safe_audit_query(self._plan(filters=[
+            {"field": "object", "operator": "contains", "value": ["CLIENT"]},
+            {"field": "return_code", "operator": "failure", "value": None},
+        ]))
+        self.assertNotIn("%CLIENT%", query.sql)
+        self.assertEqual(query.binds["filter_0"], "%CLIENT%")
+        self.assertIn("NVL(RETURNCODE, 0) <> 0", query.sql)
+
+    def test_comparison_accepts_multiple_periods(self) -> None:
+        query = build_safe_audit_query(self._plan(
+            response_mode="comparison",
+            comparison_ranges=[
+                {"label": "Aujourd'hui", "time": {"mode": "today"}},
+                {"label": "Hier", "time": {"mode": "yesterday"}},
+            ],
+        ))
+        self.assertIn("PERIOD_1_COUNT", query.sql)
+        self.assertIn("PERIOD_2_COUNT", query.sql)
+
+    def test_list_synthesis_uses_only_executed_rows(self) -> None:
+        answer = build_local_synthesis(
+            "liste les tables", [{"OBJECT_NAME": "A"}, {"OBJECT_NAME": "B"}], None,
+            self._plan(source="objects", dimensions=["object"], response_mode="list"),
+        )
+        self.assertIn("A, B", answer)
+        self.assertNotIn("utilisateur", answer.lower())
+
+    def test_comparison_synthesis_uses_period_labels_and_counts(self) -> None:
+        answer = build_local_synthesis(
+            "compare hier et aujourd'hui",
+            [{"PERIOD_1_COUNT": 12, "PERIOD_2_COUNT": 8}], None,
+            self._plan(
+                response_mode="comparison",
+                comparison_ranges=[
+                    {"label": "Aujourd'hui", "time": {"mode": "today"}},
+                    {"label": "Hier", "time": {"mode": "yesterday"}},
+                ],
+            ),
+        )
+        self.assertIn("Aujourd'hui : 12", answer)
+        self.assertIn("Hier : 8", answer)
+
+    def test_long_ranking_keeps_each_label_and_count(self) -> None:
+        rows = [{"DBUSERNAME": name, "EVENT_COUNT": count} for name, count in [
+            ("A", 9), ("B", 7), ("C", 5), ("D", 2)
+        ]]
+        answer = build_local_synthesis(
+            "classe les comptes", rows, None,
+            self._plan(response_mode="ranking"),
+        )
+        self.assertIn("A (9)", answer)
+        self.assertIn("D (2)", answer)
+
+    def test_ascending_rank_synthesis_says_least(self) -> None:
+        answer = build_local_synthesis(
+            "quel compte a le moins d'opérations",
+            [{"DBUSERNAME": "HR", "EVENT_COUNT": 2}], None,
+            self._plan(
+                calculation={"operation": "count", "field": "event"},
+                group_by=["user"],
+                order_by=[{"field": "event_count", "direction": "asc"}],
+                response_mode="ranking",
+            ),
+        )
+        self.assertIn("le moins actif", answer)
 
 
 if __name__ == "__main__":

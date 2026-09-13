@@ -1129,3 +1129,86 @@ La suite unitaire comprend maintenant 35 tests, tous réussis. Le test local de 
 ### Limites scientifiques
 
 Le résultat 8/8 caractérise seulement ce lot ciblé de reformulations et sert de validation technique du rééquilibrage. Il ne remplace pas le score de généralisation officiel de 89,1 % obtenu au premier passage du corpus aveugle v3. Le modèle actif reste Qwen2.5-Coder-1.5B-Instruct Q4_K_M. Les essais montrent qu'il peut comprendre des formulations nouvelles avec un meilleur contrat d'intention, mais aussi qu'il reste sujet aux confusions et aux sorties irrégulières. Un modèle plus grand devra être comparé lorsque 16 Go de RAM physique seront disponibles ; en attendant, les ambiguïtés non résolues doivent conduire à une clarification plutôt qu'à une requête approximative.
+
+
+## 27. Passage au plan sémantique composable et préparation du profil Qwen 7B — 13 septembre 2026
+
+### Consigne permanente de continuité
+
+Cette règle s’applique à toutes les prochaines sessions, quel que soit l’assistant utilisé. Au début d’une reprise, lire memoire.md, consulter git status, les derniers commits, les processus locaux et les derniers résultats de tests. À la fin de chaque lot cohérent, enrichir memoire.md avec la demande, le diagnostic, les décisions, l’architecture, les fichiers concernés, les commandes de validation, les résultats réellement observés, les limites, le commit publié et la prochaine étape précise. Ne jamais annoncer une réussite sans preuve de test. Garder les modèles, secrets, journaux et fichiers temporaires hors de Git. Conserver la mesure aveugle de référence de 89,1 % sur v3 séparée des tests ciblés et de non-régression.
+
+### Diagnostic ayant motivé cette refonte
+
+Trois questions ont révélé la limite structurelle du précédent contrat : le compte ayant le plus d’opérations sur dix jours, le compte en ayant le moins sur dix jours et la liste de toutes les tables. Le format précédent ne savait représenter que quelques périodes et agrégats nommés. Une période proposée par Qwen pouvait être supprimée par la normalisation, puis le nombre de jours pouvait être confondu avec une limite de résultats.
+
+Pour la liste de tables, l’intention proposée était rejetée et le constructeur retombait sur son résultat générique d’événements. La synthèse récupérait ensuite les noms d’objets présents dans ces événements et rédigeait une liste plausible. Le texte et le tableau décrivaient donc deux résultats différents. Le défaut venait à la fois du contrat trop limité, de la réinterprétation déterministe et du comportement de repli.
+
+### Nouvelle architecture générale
+
+Le flux reste entièrement local. Qwen reçoit le rôle de moteur sémantique pour des personnes non informaticiennes et produit un plan JSON, jamais du SQL. query_plan_service.py valide les valeurs, leur ancrage dans le catalogue et la cohérence structurelle. general_sql_builder.py compile ensuite ce plan en SELECT Oracle paramétré. Oracle exécute avec le compte lecteur. La synthèse utilise uniquement les lignes retournées et le frontend conserve question, SQL, synthèse et résultats.
+
+Le plan peut combiner :
+
+- source : événements, utilisateurs, objets ou actions ;
+- dimensions : utilisateur, objet, action, poste, programme, date et heure, jour, code retour ;
+- calcul : nombre, nombre distinct, minimum, maximum ou moyenne sur un champ compatible ;
+- filtres : égalité, différence, inclusion, contenu, réussite ou échec ;
+- période : toutes dates, aujourd’hui, hier, N minutes, heures, jours, semaines, mois ou années, période courante, période précédente, entre deux dates, avant, après ou jour de semaine précédent ;
+- groupement : toute dimension autorisée ;
+- tri : croissant ou décroissant ;
+- limite : quantité demandée, plafonnée par le réglage utilisateur et le maximum 200 ;
+- réponse : détail, liste, classement, comptage ou comparaison.
+
+Une durée variable n’est plus une constante comme last_10_days. Elle utilise relative_last avec une unité et une valeur. Dix jours, dix-sept heures, deux semaines et trois mois suivent donc le même mécanisme. Plus et moins utilisent le même calcul groupé et ne diffèrent que par le sens du tri.
+
+Les listes ont une source propre. Une liste de tables ou objets audités sélectionne uniquement les objets distincts ; les listes d’utilisateurs et d’actions suivent le même principe. Le système ne retombe plus automatiquement sur les colonnes standard d’événements lorsqu’une liste est demandée.
+
+### Sécurité et fidélité
+
+Qwen ne fournit aucun nom de table SQL, nom de colonne SQL, opérateur SQL ou fragment exécutable. Le compilateur possède la correspondance fixe entre concepts et colonnes. La table reste SMART2DSECU.UNIFIED_AUDIT_DATA. Les filtres, dates et durées utilisent des paramètres liés. La limite effective reste entre 1 et 200. Le compte Oracle reste lecteur.
+
+Un utilisateur ou objet proposé n’est conservé que s’il existe dans le catalogue et est réellement cité. Cette règle a supprimé une hallucination où le petit modèle ajoutait tous les comptes connus. Un plan contradictoire, par exemple une liste d’utilisateurs triée sur une date d’événement ou une comparaison sans deux périodes, demande une reformulation au lieu d’exécuter une lecture approximative.
+
+Les catalogues, comptages, comparaisons et classements reçoivent une synthèse factuelle issue des lignes Oracle. Chaque libellé et nombre est conservé. Qwen reste utilisé pour résumer les ensembles détaillés plus longs avec le validateur de fidélité déjà documenté.
+
+### Essai de génération SQL libre
+
+Le 1.5B a été testé en SQL direct. Sur le compte le plus actif en dix jours, il a compris la fenêtre et le comptage, mais a produit LIMIT 1, invalide dans Oracle. Pour la dernière personne, il a groupé les utilisateurs avec MAX(EVENT_TIMESTAMP) sans trier ni limiter. Pour la liste des tables, il a choisi ALL_TABLES, différent du catalogue d’objets audités de l’interface.
+
+Cette expérience montre qu’un SQL libre peut sembler correct tout en étant invalide, incomplet ou hors du périmètre. Cette voie n’est pas retenue : Qwen interprète le besoin et le compilateur garantit la requête Oracle.
+
+### Modèles et profils
+
+scripts/start-local.ps1 accepte désormais ModelProfile light, quality ou auto. light utilise Qwen2.5-Coder-1.5B-Instruct Q4_K_M. quality utilise Qwen2.5-Coder-7B-Instruct Q4_K_M. auto choisit le 7B si son fichier complet existe, sinon le 1.5B. Le petit modèle reste donc disponible comme profil léger.
+
+Le 7B officiel, environ 4,36 Gio, est en téléchargement dans models/qwen2.5-coder-7b. Les poids restent exclus de Git. Le transfert est parallèle et reprenable à cause du débit faible. À ce checkpoint, il est encore en cours ; aucune précision ni vitesse du 7B n’est revendiquée.
+
+Le test réel du 1.5B confirme sa limite : il reconnaît le classement plus ou moins et la source de la liste de tables, mais omet la période de dix jours et confond encore la dernière personne avec un comptage. Une seconde passe complète n’a pas corrigé ces erreurs. La révision reste optionnelle et désactivée par défaut, car elle double la latence sans gain démontré sur ce modèle. Le profil léger sert au développement et au secours ; le 7B doit être jugé sur le corpus v4.
+
+### Corpus aveugle v4 figé
+
+research/benchmarks/query_plan_holdout_v4.json contient 50 questions figées avant l’évaluation du 7B. Elles couvrent périodes variables et calendaires, dates absolues, classements, catalogues, actions, utilisateurs, objets, réussites, échecs, comptages distincts, groupements, comparaisons, détails récents, refus et ambiguïtés.
+
+research/benchmarks/benchmark_query_plan_v4.py mesure la fidélité du plan, l’exécution Oracle, l’absence de SQL dangereux et la latence. Le corpus ne sera pas modifié pour améliorer son premier score. Les corrections futures seront de la non-régression ou utiliseront un nouveau jeu aveugle. Le score historique 89,1 % reste officiel tant que v4 n’a pas été exécuté et analysé.
+
+### Interface corrigée
+
+CLIENT_PROGRAM_NAME n’est plus affiché dans le tableau principal ni dans le détail de l’historique. La valeur peut rester dans la réponse technique sans créer une colonne large. getHistory trie maintenant par date décroissante et la section des dernières questions prend les cinq premières entrées. Les questions les plus récentes apparaissent donc en premier et le clic restaure toujours la réponse enregistrée.
+
+### Validation obtenue au checkpoint
+
+La suite backend compte 51 tests réussis. Les nouveaux tests couvrent plan général, fenêtres variables, périodes calendaires, dates explicites, listes distinctes, filtres liés, comparaisons, tris ascendant et descendant, suppression des filtres inventés, cohérence et synthèses.
+
+Six familles de requêtes ont été exécutées réellement sur Oracle : classement sur dix jours, objets distincts, mois précédent, intervalle de dates, échecs groupés par poste et comparaison aujourd’hui/hier. Les six ont réussi. Le build de production Next.js 16.3.4 a compilé et généré les sept routes.
+
+Fichiers principaux : backend/app/services/query_plan_service.py, backend/app/services/general_sql_builder.py, backend/app/services/safe_sql_builder.py, backend/app/services/local_model_service.py, backend/tests/test_safe_pipeline.py, les deux pages frontend de résultats et historique, frontend/lib/api.ts, frontend/components/app-shell.tsx, scripts/start-local.ps1, le corpus v4 et son benchmark.
+
+### Prochaine reprise précise
+
+1. vérifier l’assemblage complet du GGUF 7B, taille attendue 4 683 073 536 octets pour la source utilisée ;
+2. arrêter le profil léger puis lancer start-local.ps1 avec ModelProfile quality ;
+3. mesurer chargement mémoire, stabilité avec Oracle et temps d’inférence ;
+4. tester les questions critiques puis exécuter v4 sans le modifier ;
+5. corriger les défauts d’architecture sans inscrire de question complète dans le code ;
+6. relancer les 51 tests, les lectures Oracle, le build et le test HTTP adapté ;
+7. compléter cette section avec les mesures, le commit, le push et l’état final testable.

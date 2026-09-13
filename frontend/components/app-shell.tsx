@@ -179,7 +179,7 @@ export function AppShell({ children }: AppShellProps) {
           setShowUsersColumn={setShowUsersColumn}
           setShowTablesColumn={setShowTablesColumn}
           setShowActionsColumn={setShowActionsColumn}
-          recentHistory={history.slice(-5).reverse()}
+          recentHistory={history.slice(0, 5)}
           onSelectHistory={(entry) => {
             setSelectedHistoryEntry(entry)
             router.push('/')

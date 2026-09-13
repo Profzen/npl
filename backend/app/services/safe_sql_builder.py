@@ -1,8 +1,10 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import re
 from dataclasses import dataclass
 from typing import Any, Mapping
+
+from app.services.general_sql_builder import GeneralPlanError, build_general_query
 
 
 AUDIT_TABLE = "SMART2DSECU.UNIFIED_AUDIT_DATA"
@@ -94,6 +96,15 @@ def _period_clause(period: str | None) -> str | None:
 
 
 def build_safe_audit_query(intent: Mapping[str, Any], default_limit: int = 200) -> SafeQuery:
+    if "source" in intent:
+        try:
+            sql, binds = build_general_query(intent, default_limit)
+        except GeneralPlanError as exc:
+            raise UnsafeIntentError(str(exc)) from exc
+        if not sql.lstrip().upper().startswith(("SELECT ", "WITH ")):
+            raise UnsafeIntentError("Requête non SELECT")
+        return SafeQuery(sql=sql, binds=binds)
+
     status = str(intent.get("status") or "").strip().lower()
     if status != "query":
         raise UnsafeIntentError("Seules les intentions query produisent du SQL")
