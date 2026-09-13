@@ -853,3 +853,31 @@ La correction d'origine locale et la documentation doivent être validées par T
 ### Publication GitHub effectuée
 
 Le push vers https://github.com/Profzen/npl.git a réussi. La branche distante master a avancé de 93861e6 à cf9d426 et contient les six commits locaux de récupération, d'infrastructure Oracle, d'architecture Qwen, de benchmarks, de documentation technique et de correction du chargement sur 127.0.0.1. Les modèles, secrets, journaux et fichiers runtime ignorés n'ont pas été envoyés.
+
+## 22. Nature réelle des utilisateurs, objets et événements affichés — 13 septembre 2026
+
+### Constat vérifié
+
+Les colonnes utilisateurs et objets de l'interface sont alimentées dynamiquement par des requêtes SELECT DISTINCT ou GROUP BY sur DBUSERNAME et OBJECT_NAME dans SMART2DSECU.UNIFIED_AUDIT_DATA. Elles ne sont pas actuellement alimentées par le dictionnaire Oracle ALL_USERS, DBA_USERS, ALL_OBJECTS ou DBA_OBJECTS.
+
+La base Oracle, le schéma SMART2DSECU, le compte AUDITAI_READER, les tables UNIFIED_AUDIT_DATA et AUDITAI_SEMANTIC_CATALOG ainsi que les 5 003 lignes sont réels et physiquement présents dans le conteneur Oracle.
+
+En revanche, les 5 003 événements sont un jeu de données synthétiques créé par le script infra/oracle/setup/01-create-auditai.sh. Les noms CYRILLE, REPORT_USER, BATCH_USER, CLIENT, EMPLOYEES, PAIEMENTS et les autres valeurs ont été insérés pour simuler un environnement métier. La plupart ne correspondent pas encore à de véritables comptes Oracle ni à de véritables tables métier créées dans cette base. Les lignes ne proviennent pas de l'exécution réelle des 5 003 actions par ces comptes ; elles imitent la structure du contrat d'audit utilisé par le projet.
+
+### Formulation correcte pour le mémoire
+
+La version actuelle doit être décrite comme une preuve de concept exécutée sur Oracle avec un journal d'audit normalisé contenant des événements synthétiques représentatifs. Il ne faut pas affirmer que tous les utilisateurs et objets affichés existent dans le dictionnaire Oracle local, ni que les événements ont tous été capturés par le mécanisme Unified Auditing d'Oracle.
+
+### Évolution recommandée
+
+Conserver le jeu synthétique pour les tests reproductibles, puis ajouter un scénario d'intégration réaliste :
+
+1. créer un schéma métier de démonstration avec de vraies tables, par exemple CLIENT, EMPLOYEES et PAIEMENTS ;
+2. créer quelques vrais comptes Oracle de démonstration et leur attribuer des droits limités ;
+3. activer des politiques Oracle Unified Auditing ciblées ;
+4. exécuter réellement des SELECT, INSERT, UPDATE, DELETE, GRANT et des connexions réussies ou échouées ;
+5. lire les événements depuis UNIFIED_AUDIT_TRAIL avec un compte autorisé ou les recopier dans la table normalisée UNIFIED_AUDIT_DATA ;
+6. comparer les utilisateurs et objets du journal au dictionnaire Oracle ;
+7. faire afficher distinctement les comptes et objets réels et, si nécessaire, les références historiques à des objets supprimés.
+
+Cette évolution rendra la démonstration plus réaliste sans modifier le pipeline d'intelligence artificielle déjà validé.
