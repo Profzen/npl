@@ -23,6 +23,12 @@ Pour démarrer uniquement Oracle, le modèle et l'API :
 powershell -ExecutionPolicy Bypass -File .\scripts\start-local.ps1 -SkipFrontend
 ```
 
+## Temps de chargement
+
+Lorsque le script affiche « AuditAI est prêt », Next.js est normalement disponible en environ 5 secondes. La première page peut demander quelques secondes supplémentaires ; prévoir 5 à 30 secondes sur la machine de référence. Si « Chargement des données… » reste affiché plus d'une minute, actualiser avec Ctrl+F5 puis consulter `logs/frontend.err.log` et `logs/backend.err.log`.
+
+Les touches Ctrl+C saisies après le retour de l'invite PowerShell n'arrêtent pas les services en arrière-plan. Utiliser le script d'arrêt décrit plus bas.
+
 ## Vérifier
 
 ```powershell

@@ -814,3 +814,38 @@ La contribution principale n'est pas seulement l'emploi d'un modèle de langage.
 L'expérience démontre que la génération SQL libre donne une apparence d'autonomie mais reste peu fiable et dangereuse sur un petit modèle local. Le pipeline hybride obtient une meilleure compatibilité Oracle et supprime les commandes destructrices des évaluations réalisées. Il conserve la capacité de comprendre des formulations nouvelles, car Qwen interprète chaque question au lieu de rechercher une phrase prédéfinie.
 
 Le résultat scientifique actuel doit être présenté avec prudence : 89,1 % au premier passage du corpus aveugle v3, puis 100 % sur la non-régression après correction. La suite du travail doit mesurer la fidélité et la lisibilité des réponses finales sur un corpus plus large avant de décider si un LoRA apporte un gain réel.
+
+## 21. Lot interface locale et préparation de la publication — 13 septembre 2026
+
+### Incident observé
+
+Après exécution de scripts/start-local.ps1, les quatre services écoutaient correctement sur les ports 1521, 8080, 8000 et 3000. Next.js annonçait Ready en 4,3 secondes, mais le navigateur ouvert sur http://127.0.0.1:3000 restait sur « Chargement des données… ».
+
+Les journaux frontend ont montré que Next.js 16.3.4 bloquait ses ressources de développement, notamment /_next/hmr et la police locale Geist, car le serveur était initialisé avec le nom localhost tandis que le navigateur utilisait l'adresse 127.0.0.1. Ce contrôle de sécurité est propre au serveur de développement de Next.js.
+
+### Correction
+
+La configuration frontend/next.config.mjs autorise désormais explicitement 127.0.0.1 dans allowedDevOrigins. Cette valeur est limitée à l'adresse de boucle locale. Le backend autorisait déjà http://127.0.0.1:3000 dans sa configuration CORS.
+
+Après rechargement automatique de Next.js, la ressource de police demandée avec l'origine http://127.0.0.1:3000 répond en HTTP 200. Le test authentifié de bout en bout passe : API OK, Oracle connected, modèle loaded, 9 utilisateurs, 14 objets, mot de passe masqué, frontend HTTP 200, agrégation exécutée, clarification produite et ordre destructeur refusé.
+
+### Temps de démarrage observé
+
+Le script n'affiche « AuditAI est prêt » qu'après disponibilité des ports et état healthy d'Oracle. Une fois ce message affiché, Next.js a besoin normalement d'environ 5 secondes pour être prêt sur cette machine ; la première compilation d'une page peut ajouter quelques secondes. Une attente de 5 à 30 secondes reste raisonnable. Un chargement qui dépasse environ une minute doit être considéré comme une anomalie et conduit à consulter les fichiers logs/frontend.err.log et logs/backend.err.log.
+
+Les touches Ctrl+C saisies après le retour de l'invite PowerShell n'arrêtent pas les processus lancés en arrière-plan. Pour arrêter proprement le projet, utiliser scripts/stop-local.ps1.
+
+### État avant publication
+
+La correction d'origine locale et la documentation doivent être validées par TypeScript, le build Next.js, le test HTTP et git diff --check, puis enregistrées dans un commit local. L'utilisateur a explicitement demandé de publier tout l'état local actuel sur origin/master.
+
+### Validation après correction
+
+- ressource de développement demandée depuis 127.0.0.1 : HTTP 200 ;
+- npx tsc --noEmit : réussi ;
+- npm run build : réussi, compilation de production en 13,3 secondes ;
+- redémarrage avec scripts/start-local.ps1 : réussi ;
+- test HTTP authentifié après redémarrage : réussi en environ 19 secondes ;
+- Oracle connecté, Qwen chargé, 9 utilisateurs et 14 objets visibles ;
+- secret Oracle masqué, agrégation valide, clarification valide et refus destructeur valide ;
+- aucun nouveau message de blocage d'origine dans le journal frontend après redémarrage.
