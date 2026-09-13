@@ -180,7 +180,10 @@ export function AppShell({ children }: AppShellProps) {
           setShowTablesColumn={setShowTablesColumn}
           setShowActionsColumn={setShowActionsColumn}
           recentHistory={history.slice(-5).reverse()}
-          onSelectHistory={(entry) => setSelectedHistoryEntry(entry)}
+          onSelectHistory={(entry) => {
+            setSelectedHistoryEntry(entry)
+            router.push('/')
+          }}
         />
         <SidebarInset className="bg-background">
           {children}

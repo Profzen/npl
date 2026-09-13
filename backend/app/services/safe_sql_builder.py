@@ -113,10 +113,18 @@ def build_safe_audit_query(intent: Mapping[str, Any], default_limit: int = 200) 
         raise UnsafeIntentError(f"Actions inconnues: {sorted(unknown_actions)}")
 
     try:
-        requested_limit = int(intent.get("limit") or default_limit)
+        configured_limit = max(1, min(200, int(default_limit)))
     except (TypeError, ValueError):
-        requested_limit = default_limit
-    limit = max(1, min(200, requested_limit))
+        configured_limit = 10
+    raw_limit = intent.get("limit")
+    if raw_limit in (None, ""):
+        limit = configured_limit
+    else:
+        try:
+            requested_limit = max(1, int(raw_limit))
+        except (TypeError, ValueError):
+            requested_limit = configured_limit
+        limit = min(configured_limit, requested_limit)
 
     clauses: list[str] = []
     binds: dict[str, Any] = {}

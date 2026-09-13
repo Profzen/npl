@@ -21,8 +21,11 @@ interface BackendHistoryEntry {
   question: string
   sql: string
   synthesis: string
+  rows?: Record<string, unknown>[]
   row_count: number
   blocked?: boolean
+  intent_status?: 'query' | 'clarification' | 'refusal'
+  clarification?: string | null
   error?: string | null
 }
 
@@ -185,9 +188,11 @@ export async function getHistory(): Promise<HistoryEntry[]> {
       question: entry.question,
       sql: entry.sql,
       synthesis: entry.synthesis,
-      rows: [],
+      rows: Array.isArray(entry.rows) ? entry.rows : [],
       row_count: Number(entry.row_count || 0),
       blocked: Boolean(entry.blocked),
+      intent_status: entry.intent_status,
+      clarification: entry.clarification ?? null,
       error: entry.error ?? null,
       created_at: createdAt,
       status: entry.error ? 'error' : 'ok',

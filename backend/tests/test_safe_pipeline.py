@@ -83,6 +83,25 @@ class SafeSqlBuilderTests(unittest.TestCase):
         self.assertEqual(query.binds["action_0"], "DELETE")
         self.assertIn("FETCH FIRST 200 ROWS ONLY", query.sql)
 
+    def test_configured_limit_caps_model_limit(self) -> None:
+        query = build_safe_audit_query({
+            "status": "query", "users": [], "objects": [], "actions": [],
+            "period": None, "aggregate": None, "failed_only": False, "limit": 200,
+        }, default_limit=3)
+        self.assertIn("FETCH FIRST 3 ROWS ONLY", query.sql)
+
+    def test_singular_last_event_requests_one_row(self) -> None:
+        intent = normalize_intent("Montre le dernier événement", {}, USERS, OBJECTS)
+        self.assertEqual(intent["limit"], 1)
+        query = build_safe_audit_query(intent, default_limit=10)
+        self.assertIn("FETCH FIRST 1 ROWS ONLY", query.sql)
+
+    def test_explicit_smaller_limit_is_respected(self) -> None:
+        intent = normalize_intent("Montre les trois derniers événements", {}, USERS, OBJECTS)
+        self.assertEqual(intent["limit"], 3)
+        query = build_safe_audit_query(intent, default_limit=10)
+        self.assertIn("FETCH FIRST 3 ROWS ONLY", query.sql)
+
     def test_unknown_action_is_rejected(self) -> None:
         with self.assertRaises(UnsafeIntentError):
             build_safe_audit_query({
@@ -118,6 +137,29 @@ class SynthesisTests(unittest.TestCase):
         )
         self.assertIn("SELECT", answer)
         self.assertIn("626", answer)
+
+    def test_one_row_is_explained_as_a_sentence(self) -> None:
+        answer = build_local_synthesis(
+            "Qui a consulté CLIENT ?",
+            [{"DBUSERNAME": "CYRILLE", "ACTION_NAME": "SELECT", "OBJECT_NAME": "CLIENT"}],
+            None,
+        )
+        self.assertIn("L'utilisateur CYRILLE a réalisé", answer)
+        self.assertIn("CLIENT", answer)
+
+    def test_two_rows_are_explained_as_sentences(self) -> None:
+        answer = build_local_synthesis(
+            "Qui a modifié CLIENT ?",
+            [
+                {"DBUSERNAME": "CYRILLE", "ACTION_NAME": "UPDATE", "OBJECT_NAME": "CLIENT"},
+                {"DBUSERNAME": "SYSTEM", "ACTION_NAME": "SELECT", "OBJECT_NAME": "CLIENT"},
+            ],
+            None,
+        )
+        self.assertIn("Deux événements", answer)
+        self.assertIn("CYRILLE", answer)
+        self.assertIn("SYSTEM", answer)
+        self.assertNotIn("Consultez le tableau", answer)
 
 
 if __name__ == "__main__":

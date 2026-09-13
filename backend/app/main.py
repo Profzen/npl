@@ -100,7 +100,7 @@ def startup() -> None:
 
 def _get_query_cache_key(question: str) -> str:
     """Generate cache key from normalized question."""
-    normalized = question.lower().strip()
+    normalized = f"{get_fetch_limit()}:{question.lower().strip()}"
     return hashlib.md5(normalized.encode()).hexdigest()
 
 
@@ -417,6 +417,7 @@ def _execute_query_pipeline(req: QueryRequest, username: str, request_id: str | 
         "question": req.question,
         "sql": sql,
         "synthesis": synthesis,
+        "rows": rows[:fetch_limit],
         "row_count": len(rows),
         "blocked": blocked,
         "intent_status": intent_status,

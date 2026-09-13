@@ -16,8 +16,9 @@ MODEL_TIMEOUT_SECONDS = int(os.getenv("AUDITAI_MODEL_TIMEOUT_SECONDS", "120"))
 _INTENT_PROMPT = """Tu extrais une intention de lecture des journaux d'audit Oracle.
 Réponds uniquement par un objet JSON, sans SQL ni explication:
 {"status":"query|clarification|refusal","users":[],"objects":[],"actions":[],
-"period":null,"aggregate":null,"failed_only":false,"limit":200,"clarification":null}
+"period":null,"aggregate":null,"failed_only":false,"limit":null,"clarification":null}
 N'invente aucune entité. Une liste vide signifie tous.
+Limit est un nombre seulement si l'utilisateur demande explicitement un nombre de résultats, sinon null.
 Périodes: today, yesterday, last_friday, range_weekdays, last_14_days, night_range,
 this_week, this_month, last_30_days, compare_today_yesterday ou null.
 Agrégats: count_distinct_user, top_action, compare, top_host, top_user, top_objects ou null.
@@ -28,10 +29,11 @@ Un ordre réel de modifier les données est refusal.
 Une référence inexploitable ou une date ambiguë est clarification."""
 
 _SYNTHESIS_PROMPT = """Tu expliques un résultat d'audit Oracle à une personne non informaticienne.
-Réponds en français, directement, en 1 à 5 phrases.
+Réponds en français, directement, en 1 à 5 phrases, avec une formulation naturelle adaptée à la question.
 Conserve exactement les noms, nombres, dates, heures et postes fournis.
 N'invente aucun fait. Ne parle ni de SQL, ni de colonnes, ni de modèle.
-Si plusieurs lignes sont fournies, indique le nombre et résume les faits pertinents."""
+Résume les faits pertinents. Mentionne le nombre total seulement s'il aide directement à répondre.
+Ne présente jamais une limite technique de résultats comme un fait métier."""
 
 _ACTION_FR = {
     "LOGON": "connexion",
@@ -148,25 +150,65 @@ def _rule_synthesis(rows: list[dict[str, Any]], error: str | None = None) -> str
                 return f"Le poste le plus concerné est {row['USERHOST']}, avec {count} événement(s)."
             if row.get("OBJECT_NAME"):
                 return f"L'objet le plus concerné est {row['OBJECT_NAME']}, avec {count} événement(s)."
-        parts = []
-        if row.get("DBUSERNAME"):
-            parts.append(f"utilisateur {row['DBUSERNAME']}")
-        if row.get("ACTION_NAME"):
-            parts.append(_ACTION_FR.get(str(row["ACTION_NAME"]).upper(), str(row["ACTION_NAME"])))
+        action = _ACTION_FR.get(
+            str(row.get("ACTION_NAME") or "").upper(),
+            str(row.get("ACTION_NAME") or "activité"),
+        )
+        actor = (
+            f"L'utilisateur {row['DBUSERNAME']}"
+            if row.get("DBUSERNAME")
+            else "Un utilisateur"
+        )
+        detail = f"{actor} a réalisé l'opération « {action} »"
         if row.get("OBJECT_NAME"):
-            parts.append(f"sur {row['OBJECT_NAME']}")
+            detail += f" sur {row['OBJECT_NAME']}"
         if row.get("EVENT_TIMESTAMP"):
-            parts.append(f"le {_json_default(row['EVENT_TIMESTAMP'])}")
+            detail += f" le {_json_default(row['EVENT_TIMESTAMP'])}"
         if row.get("USERHOST"):
-            parts.append(f"depuis {row['USERHOST']}")
+            detail += f" depuis {row['USERHOST']}"
         if row.get("RETURNCODE") not in (None, 0, "0"):
-            parts.append(f"code d'échec {row['RETURNCODE']}")
-        return "Un événement a été trouvé : " + ", ".join(parts) + "."
-    return f"{len(rows)} événements correspondent à la demande. Consultez le tableau pour le détail exact."
+            detail += f", avec le code d'échec {row['RETURNCODE']}"
+        return f"Un événement correspond à la demande. {detail}."
+    if len(rows) <= 3:
+        descriptions: list[str] = []
+        for raw_row in rows:
+            row = {str(key).upper(): value for key, value in raw_row.items() if value is not None}
+            if "EVENT_COUNT" in row:
+                if row.get("OBJECT_NAME"):
+                    descriptions.append(f"{row['OBJECT_NAME']} totalise {row['EVENT_COUNT']} événement(s)")
+                elif row.get("ACTION_NAME"):
+                    descriptions.append(f"{row['ACTION_NAME']} totalise {row['EVENT_COUNT']} événement(s)")
+                else:
+                    descriptions.append(f"{row['EVENT_COUNT']} événement(s)")
+                continue
+
+            action = _ACTION_FR.get(
+                str(row.get("ACTION_NAME") or "").upper(),
+                str(row.get("ACTION_NAME") or "activité"),
+            )
+            actor = (
+                f"L'utilisateur {row['DBUSERNAME']}"
+                if row.get("DBUSERNAME")
+                else "Un utilisateur"
+            )
+            detail = f"{actor} a réalisé l'opération « {action} »"
+            if row.get("OBJECT_NAME"):
+                detail += f" sur {row['OBJECT_NAME']}"
+            if row.get("EVENT_TIMESTAMP"):
+                detail += f" le {_json_default(row['EVENT_TIMESTAMP'])}"
+            if row.get("USERHOST"):
+                detail += f" depuis {row['USERHOST']}"
+            if row.get("RETURNCODE") not in (None, 0, "0"):
+                detail += f", avec le code d'échec {row['RETURNCODE']}"
+            descriptions.append(detail)
+
+        count_label = "Deux" if len(rows) == 2 else "Trois"
+        return f"{count_label} événements correspondent à la demande. " + ". ".join(descriptions) + "."
+    return "Plusieurs événements correspondent à la demande. Consultez le tableau pour le détail exact."
 
 
 def build_local_synthesis(question: str, rows: list[dict[str, Any]], error: str | None) -> str:
-    if error or not rows or len(rows) == 1:
+    if error or not rows or len(rows) <= 3:
         return _rule_synthesis(rows, error)
     compact_rows = rows[:25]
     user_content = (

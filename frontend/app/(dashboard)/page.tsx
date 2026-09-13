@@ -144,7 +144,9 @@ export default function HomePage() {
         synthesis: selectedHistoryEntry.synthesis,
         rows: selectedHistoryEntry.rows || [],
         row_count: selectedHistoryEntry.row_count,
-        blocked: false,
+        blocked: selectedHistoryEntry.blocked,
+        intent_status: selectedHistoryEntry.intent_status,
+        clarification: selectedHistoryEntry.clarification,
         error: selectedHistoryEntry.error,
       })
       setError(null)

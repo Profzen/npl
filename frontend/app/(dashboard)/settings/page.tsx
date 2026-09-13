@@ -228,10 +228,10 @@ export default function SettingsPage() {
                   id="max_results"
                   type="number"
                   value={formData.max_results}
-                  onChange={(e) => handleInputChange('max_results', parseInt(e.target.value) || 100)}
-                  placeholder="100"
+                  onChange={(e) => handleInputChange('max_results', parseInt(e.target.value) || 10)}
+                  placeholder="10"
                   min={1}
-                  max={10000}
+                  max={200}
                 />
                 <p className="text-xs text-muted-foreground">
                   {t('settings.max_results_help')}

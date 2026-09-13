@@ -129,6 +129,32 @@ def _detect_aggregate(text: str) -> tuple[str | None, int]:
     return None, 200
 
 
+def _detect_requested_limit(text: str) -> int | None:
+    item_words = (
+        r"DERNIERS?|DERNIERES?|PREMIERS?|PREMIERES?|EVENEMENTS?|RESULTATS?|"
+        r"LIGNES?|OPERATIONS?|ACTIONS?|TABLES?|OBJETS?"
+    )
+    if re.search(
+        r"\b(?:LE|LA)\s+(?:DERNIER|DERNIERE|PREMIER|PREMIERE)\s+"
+        r"(?:EVENEMENT|RESULTAT|LIGNE|OPERATION|ACTION)\b",
+        text,
+    ):
+        return 1
+
+    numeric = re.search(rf"\b(\d{{1,3}})\s+(?:{item_words})\b", text)
+    if numeric:
+        return max(1, min(200, int(numeric.group(1))))
+
+    words = {
+        "UN": 1, "UNE": 1, "DEUX": 2, "TROIS": 3, "QUATRE": 4,
+        "CINQ": 5, "SIX": 6, "SEPT": 7, "HUIT": 8, "NEUF": 9, "DIX": 10,
+    }
+    for word, value in words.items():
+        if re.search(rf"\b{word}\s+(?:{item_words})\b", text):
+            return value
+    return None
+
+
 def _has_time_cue(text: str) -> bool:
     return bool(re.search(
         r"\b(JOUR|JOURNEE|HIER|VEILLE|SEMAINE|QUINZAINE|MOIS|VENDREDI|"
@@ -190,7 +216,11 @@ def normalize_intent(
     objects = _catalog_matches(text, known_objects)
     actions = _detect_actions(text)
     period = _detect_period(text)
-    aggregate, limit = _detect_aggregate(text)
+    aggregate, aggregate_limit = _detect_aggregate(text)
+    requested_limit = _detect_requested_limit(text)
+    limit = requested_limit
+    if limit is None and aggregate == "top_objects":
+        limit = aggregate_limit
 
     # Preserve a model classification only where deterministic language has no stronger signal.
     status = str(raw_intent.get("status") or "query").lower()
@@ -233,7 +263,7 @@ def normalize_intent(
 
     if status != "query":
         aggregate = None
-        limit = 200
+        limit = None
 
     return {
         "status": status,

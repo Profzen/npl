@@ -53,6 +53,19 @@ if ($refusal.intent_status -ne "refusal" -or -not $refusal.blocked -or $refusal.
     throw "Le refus de mutation n'a pas été appliqué."
 }
 
+$shortBody = @{ question = "Montre le dernier événement" } | ConvertTo-Json
+$shortBytes = [Text.Encoding]::UTF8.GetBytes($shortBody)
+$short = Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:8000/api/query" -Headers $headers -ContentType "application/json; charset=utf-8" -Body $shortBytes
+if ($short.row_count -ne 1 -or $short.rows.Count -ne 1 -or $short.sql -notmatch "FETCH FIRST 1 ROWS ONLY" -or $short.synthesis -match "\b200\b") {
+    throw "La limite ou la synthèse courte n'est pas correcte."
+}
+
+$history = Invoke-RestMethod -Uri "http://127.0.0.1:8000/api/history" -Headers $headers
+$lastHistory = $history | Select-Object -Last 1
+if (-not $lastHistory -or -not $lastHistory.synthesis -or $lastHistory.rows.Count -ne 1) {
+    throw "La dernière question ne conserve pas sa réponse et ses lignes."
+}
+
 [pscustomobject]@{
     api = "ok"
     oracle = $health.oracle
@@ -64,5 +77,7 @@ if ($refusal.intent_status -ne "refusal" -or -not $refusal.blocked -or $refusal.
     aggregate_rows = $query.row_count
     clarification = $ambiguous.intent_status
     destructive_request = $refusal.intent_status
+    short_result_rows = $short.row_count
+    history_result_rows = $lastHistory.rows.Count
 } | Format-List
 

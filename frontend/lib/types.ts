@@ -92,6 +92,8 @@ export interface HistoryEntry {
   rows: Record<string, unknown>[]
   row_count: number
   blocked: boolean
+  intent_status?: 'query' | 'clarification' | 'refusal'
+  clarification?: string | null
   error: string | null
   created_at: string
   status: 'ok' | 'error'

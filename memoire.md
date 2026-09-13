@@ -881,3 +881,91 @@ Conserver le jeu synthétique pour les tests reproductibles, puis ajouter un sc�
 7. faire afficher distinctement les comptes et objets réels et, si nécessaire, les références historiques à des objets supprimés.
 
 Cette évolution rendra la démonstration plus réaliste sans modifier le pipeline d'intelligence artificielle déjà validé.
+
+## 23. Lot résultats adaptatifs, limite réelle et dernières questions — 13 septembre 2026
+
+### Problèmes signalés et causes vérifiées
+
+L'utilisateur observait la mention de 200 éléments, des requêtes semblant imprécises, un doute sur le paramètre « Résultats max par requête » et l'absence de restauration complète au clic sur « Dernières questions ».
+
+La limite enregistrée dans backend_runtime_settings.json était 10. Cependant, le prompt d'intention proposait systématiquement limit: 200 et normalize_intent renvoyait lui aussi 200 dans la plupart des cas. build_safe_audit_query privilégiait cette valeur à la valeur configurée. Oracle lisait donc jusqu'à 200 lignes, la synthèse recevait ces 200 lignes et pouvait annoncer 200 événements, puis l'API découpait seulement l'affichage à 10 lignes. Le réglage agissait sur l'affichage final mais pas sur l'ensemble du traitement.
+
+L'historique backend conservait la question, le SQL et la synthèse, mais pas les lignes. Le convertisseur frontend remplaçait toujours les lignes historiques par une liste vide. Le clic enregistrait une sélection dans le contexte sans naviguer vers l'accueil lorsque l'utilisateur se trouvait sur une autre page. Le statut blocked était également perdu lors de la restauration.
+
+### Corrections du maximum de résultats
+
+La valeur max_results est maintenant la limite supérieure réelle du SQL. Le constructeur calcule la limite comme le minimum entre la configuration, une éventuelle demande explicite de l'utilisateur et le plafond de sécurité de 200. Si la question ne demande aucun nombre, la configuration est utilisée. Le modèle ne peut plus imposer 200 de lui-même.
+
+Exemples :
+
+- configuration 10 et question sans nombre : FETCH FIRST 10 ROWS ONLY ;
+- configuration 10 et « montre les trois derniers événements » : FETCH FIRST 3 ROWS ONLY ;
+- configuration 2 et demande de dix résultats : au maximum 2 lignes ;
+- « montre le dernier événement » : FETCH FIRST 1 ROWS ONLY.
+
+L'analyseur reconnaît les nombres de 1 à 10 écrits en lettres, les nombres de 1 à 200 écrits en chiffres et les formes singulières « le dernier événement », « la première opération », etc. Le champ limit demandé au modèle vaut désormais null par défaut. La clé du cache inclut max_results afin qu'un changement de paramètre ne réutilise pas pendant 60 secondes une ancienne réponse calculée avec une autre limite.
+
+L'interface de paramètres affiche un défaut cohérent de 10 et un maximum de 200, identique à la validation backend. La valeur temporairement modifiée pendant le test a été restaurée à 10.
+
+### Synthèse adaptative
+
+Le système adapte maintenant la forme de la réponse à sa taille :
+
+- zéro ligne : message clair indiquant qu'aucune activité ne correspond ;
+- une ligne : phrase complète décrivant l'utilisateur, l'opération, l'objet, la date, le poste et l'échec éventuel ;
+- deux ou trois lignes : une introduction courte suivie d'une phrase factuelle pour chaque événement ;
+- quatre lignes ou davantage : Qwen produit un résumé naturel à partir des résultats contrôlés et le tableau reste disponible ;
+- agrégat : synthèse déterministe conservant exactement le libellé et le nombre.
+
+Le prompt de synthèse n'oblige plus Qwen à annoncer le nombre total. Il lui demande de le mentionner uniquement lorsque cela répond utilement à la question et lui interdit de présenter une limite technique comme un fait métier. Cette répartition conserve l'intelligence de Qwen pour les ensembles qui nécessitent un résumé et garantit rapidité et fidélité pour les petits résultats.
+
+### Correction de « Dernières questions »
+
+Chaque nouvelle entrée en mémoire conserve maintenant les lignes réellement affichées, dans la limite configurée, ainsi que question, SQL, synthèse, nombre de lignes, statut query/clarification/refusal, clarification, indicateur blocked et erreur. Le frontend utilise ces valeurs au lieu de créer une liste vide.
+
+Un clic sur une question récente place l'entrée dans le contexte, navigue vers la page d'accueil, restaure la question et la réponse, restaure le tableau et le statut, puis fait défiler la page vers le résultat. Les anciennes entrées créées avant cette correction peuvent ne pas posséder de lignes. L'historique principal reste en mémoire vive et repart à zéro au redémarrage du backend ; sa persistance complète en SQLite reste une amélioration future distincte.
+
+### Vérifications fonctionnelles
+
+Les tests unitaires passent de 10 à 15 cas et couvrent notamment le plafond configuré, la demande explicite de trois lignes, la forme singulière à une ligne et les phrases pour une ou deux lignes. Résultat : 15/15 réussis.
+
+Le contrôle TypeScript a réussi et le build Next.js a réussi. Le test HTTP de bout en bout a réussi après redémarrage.
+
+Essai dynamique du paramètre :
+
+- valeur initiale : 10 ;
+- valeur temporaire : 2 ;
+- question : « Montre les activités de ce mois » ;
+- SQL obtenu : filtre du mois courant et FETCH FIRST 2 ROWS ONLY ;
+- résultat : exactement deux lignes et deux phrases ;
+- aucune mention de 200 ;
+- valeur restaurée ensuite à 10.
+
+Essai d'une quantité demandée :
+
+- question : « Montre les trois derniers événements » ;
+- SQL : tri décroissant sur EVENT_TIMESTAMP et FETCH FIRST 3 ROWS ONLY ;
+- résultat : trois lignes et trois phrases ;
+- historique : question, synthèse et trois lignes conservées.
+
+Essai singulier après redémarrage :
+
+- question : « Montre le dernier événement » ;
+- SQL : tri décroissant et FETCH FIRST 1 ROWS ONLY ;
+- résultat : une ligne ;
+- réponse : phrase complète sur CYRILLE_TBS, une consultation de CONTRATS, la date et le poste ;
+- aucune mention de 200.
+
+Contrôle de précision SQL sur des formulations représentatives :
+
+- « Qui a supprimé des données sur CLIENT hier ? » produit les filtres OBJECT_NAME=CLIENT, ACTION_NAME=DELETE et la période d'hier ;
+- « Quelles connexions ont échoué aujourd'hui ? » produit ACTION_NAME=LOGON, RETURNCODE différent de zéro et la période d'aujourd'hui ;
+- « Quelle action est la plus fréquente ? » groupe par ACTION_NAME, trie par nombre décroissant et ne retourne que la première action.
+
+Le script scripts/test-local.ps1 vérifie désormais aussi une réponse d'une ligne sans mention de 200 et la présence de cette ligne dans l'historique. Son dernier passage confirme API, Oracle, modèle, frontend, secret masqué, agrégat, clarification, refus, résultat court et historique.
+
+### Limites et prochaine étape
+
+La correction améliore la construction et la restitution, mais elle ne transforme pas le score aveugle de généralisation : la référence scientifique reste 89,1 %. Les SQL vérifiés sont exacts pour les cas représentatifs ci-dessus ; toute formulation nouvelle doit continuer à être ajoutée à un corpus aveugle avant correction.
+
+La prochaine amélioration de l'historique sera sa persistance dans SQLite avec stockage contrôlé des résultats ou possibilité de réexécuter une ancienne question. La prochaine évaluation de synthèse devra examiner des résultats de quatre lignes ou plus pour mesurer la variété, la fidélité et l'absence d'informations inventées.
