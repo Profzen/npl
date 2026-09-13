@@ -1,0 +1,310 @@
+{
+  "model": "Qwen2.5-Coder-1.5B-Instruct Q4_K_M",
+  "cases": 30,
+  "mean_structure_score": 0.564,
+  "oracle_success": 5,
+  "oracle_attempted": 28,
+  "mean_latency_seconds": 15.357,
+  "results": [
+    {
+      "id": "T01",
+      "question": "Qu'est-ce qui s'est passé aujourd'hui ?",
+      "answer": "SELECT * FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE DBUSERNAME IN ('SYS', 'SYSTEM', 'CYRILLE', 'CYRILLE_TBS', 'ITEST', 'HR', 'SMART2DADMIN', 'SMART2DADMINI', 'BATCH_USER', 'PROD2_MDS', 'PROD2_STB', 'AUDIT_MANAGER', 'REPORT_USER', 'NEW_USER_APP') AND ACTION_NAME NOT IN ('LOGON', 'LOGOFF', 'SELECT', 'INSERT', 'UPDATE', 'DELETE', 'GRANT', 'REVOKE', 'ALTER', 'TRUNCATE', 'CREATE USER', 'DROP USER', 'ALTER USER', 'CREATE TABLE', 'DROP TABLE') AND EVENT_TIMESTAMP >= TRUNC(SYSDATE) AND EVENT_TIMESTAMP < TRUNC(SYSDATE) + 1 ORDER BY EVENT_TIMESTAMP DESC LIMIT",
+      "latency_seconds": 71.019,
+      "structure_score": 1.0,
+      "oracle_ok": false,
+      "oracle_error": "ORA-03049: SQL keyword 'LIMIT' is not syntactically valid following '...ORDER BY EVENT_TIMESTAMP DESC '",
+      "row_count_sample": null
+    },
+    {
+      "id": "T02",
+      "question": "c passé koi hier dans la base",
+      "answer": "CLARIFICATION: Pourquoi avez-vous besoin de cette information?",
+      "latency_seconds": 3.556,
+      "structure_score": 0.0,
+      "oracle_ok": null,
+      "oracle_error": null,
+      "row_count_sample": null
+    },
+    {
+      "id": "T03",
+      "question": "Montre-moi les activités de vendredi dernier",
+      "answer": "CLARIFICATION: Pour obtenir les activités de vendredi dernier, il faut utiliser la fonction TRUNC(SYSDATE,'IW') pour obtenir le jour de vendredi dernier et TRUNC(SYSDATE-1) pour obtenir le jour de vendredi avant. Ensuite, vous pouvez utiliser une requête SQL pour sélectionner les actions de vendredi dernier.\n\nVoici la commande SQL pour obtenir les activités de vendredi dernier :\n\n```sql\nSELECT DBUSERNAME, ACTION_NAME, OBJECT_NAME, EVENT_TIMESTAMP, USERHOST, CLIENT_PROGRAM_NAME, RETURNCODE, SQL_TEXT, OS_USERNAME, AUTHENTICATION_TYPE, OBJECT_SCHEMA, SESSIONID\nFROM SMART2DSECU.UNIFIED_AUDIT_DATA\nWHERE EVENT_TIMESTAMP >= TRUNC(SYSDATE-1) AND EVENT_TIMESTAMP < TRUNC(SYSDATE)\nORDER BY EVENT_TIMESTAMP DESC\nLIMIT",
+      "latency_seconds": 52.579,
+      "structure_score": 0.0,
+      "oracle_ok": false,
+      "oracle_error": "ORA-03049: SQL keyword 'LIMIT' is not syntactically valid following '...ORDER BY EVENT_TIMESTAMP DESC",
+      "row_count_sample": null
+    },
+    {
+      "id": "T04",
+      "question": "Que s'est-il passé entre lundi et mercredi ?",
+      "answer": "SELECT * FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE DBUSERNAME IN ('CYRILLE', 'CYRILLE_TBS', 'ITEST', 'HR', 'SMART2DADMIN', 'SMART2DADMINI', 'BATCH_USER', 'PROD2_MDS', 'PROD2_STB', 'AUDIT_MANAGER', 'REPORT_USER', 'NEW_USER_APP') AND ACTION_NAME IN ('SELECT', 'INSERT', 'UPDATE', 'DELETE', 'GRANT', 'REVOKE', 'ALTER', 'TRUNCATE', 'CREATE USER', 'DROP USER', 'ALTER USER', 'CREATE TABLE', 'DROP TABLE') AND EVENT_TIMESTAMP BETWEEN TRUNC(SYSDATE) AND TRUNC(SYSDATE) + 2 AND OBJECT_NAME IN ('EMPLOYEES', 'DEPARTMENTS', 'HR', 'ADRESS', 'CLIENT",
+      "latency_seconds": 20.293,
+      "structure_score": 1.0,
+      "oracle_ok": false,
+      "oracle_error": "DPY-2041: missing ending quote (')",
+      "row_count_sample": null
+    },
+    {
+      "id": "T05",
+      "question": "Les opérations des deux dernières semaines",
+      "answer": "SELECT * FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE DBUSERNAME IN ('CYRILLE', 'CYRILLE_TBS', 'ITEST', 'HR', 'SMART2DADMIN', 'SMART2DADMINI', 'BATCH_USER', 'PROD2_MDS', 'PROD2_STB', 'AUDIT_MANAGER', 'REPORT_USER', 'NEW_USER_APP') AND EVENT_TIMESTAMP >= TRUNC(SYSDATE) - 14 AND EVENT_TIMESTAMP < TRUNC(SYSDATE) AND ACTION_NAME NOT IN ('LOGON', 'LOGOFF', 'SELECT', 'INSERT', 'UPDATE', 'DELETE', 'GRANT', 'REVOKE', 'ALTER', 'TRUNCATE', 'CREATE USER', 'DROP USER', 'ALTER USER', 'CREATE TABLE', 'DROP TABLE') ORDER BY EVENT_TIMESTAMP DESC LIMIT 200",
+      "latency_seconds": 23.794,
+      "structure_score": 0.5,
+      "oracle_ok": false,
+      "oracle_error": "ORA-03049: SQL keyword 'LIMIT' is not syntactically valid following '...ORDER BY EVENT_TIMESTAMP DESC '",
+      "row_count_sample": null
+    },
+    {
+      "id": "T06",
+      "question": "Qui travaillait sur la base entre 22h et 6h ?",
+      "answer": "SELECT DBUSERNAME, ACTION_NAME, OBJECT_NAME, EVENT_TIMESTAMP, USERHOST, CLIENT_PROGRAM_NAME, RETURNCODE, SQL_TEXT, OS_USERNAME, AUTHENTICATION_TYPE, OBJECT_SCHEMA, SESSIONID \nFROM SMART2DSECU.UNIFIED_AUDIT_DATA \nWHERE EVENT_TIMESTAMP BETWEEN TRUNC(SYSDATE) - 1 AND TRUNC(SYSDATE) \nAND USERHOST LIKE '%22h%' OR USERHOST LIKE '%6h%' \nORDER BY EVENT_TIMESTAMP DESC \nLIMIT 200",
+      "latency_seconds": 14.707,
+      "structure_score": 0.5,
+      "oracle_ok": false,
+      "oracle_error": "ORA-03049: SQL keyword 'LIMIT' is not syntactically valid following '...BY EVENT_TIMESTAMP DESC ",
+      "row_count_sample": null
+    },
+    {
+      "id": "A01",
+      "question": "ki a suprimer des données sur CLIENT hier ?",
+      "answer": "CLARIFICATION: Pour supprimer des données sur CLIENT hier, il faut rechercher les événements de logoff ou de delete sur le CLIENT qui ont eu lieu hier. Voici le SQL pour obtenir ces données :\n\n```sql\nSELECT *\nFROM SMART2DSECU.UNIFIED_AUDIT_DATA\nWHERE DBUSERNAME = 'CLIENT'\nAND (ACTION_NAME = 'LOGOFF' OR ACTION_NAME = 'DELETE')\nAND EVENT_TIMESTAMP >= TRUNC(SYSDATE) - 1\nORDER BY EVENT_TIMESTAMP DESC\nLIMIT 200;\n```",
+      "latency_seconds": 16.812,
+      "structure_score": 0.5,
+      "oracle_ok": false,
+      "oracle_error": "ORA-03049: SQL keyword 'LIMIT' is not syntactically valid following '...ORDER BY EVENT_TIMESTAMP DESC",
+      "row_count_sample": null
+    },
+    {
+      "id": "A02",
+      "question": "Qui a donné des droits sur EMPLOYEES aujourd'hui ?",
+      "answer": "SELECT DBUSERNAME, USERHOST, CLIENT_PROGRAM_NAME, EVENT_TIMESTAMP, USERHOST, CLIENT_PROGRAM_NAME, RETURNCODE, SQL_TEXT, OS_USERNAME, AUTHENTICATION_TYPE, OBJECT_SCHEMA, SESSIONID \nFROM SMART2DSECU.UNIFIED_AUDIT_DATA \nWHERE DBUSERNAME IN ('CYRILLE', 'CYRILLE_TBS', 'ITEST', 'HR', 'SMART2DADMIN', 'SMART2DADMINI', 'BATCH_USER', 'PROD2_MDS', 'PROD2_STB', 'AUDIT_MANAGER', 'REPORT_USER', 'NEW_USER_APP') \nAND ACTION_NAME IN ('GRANT', 'REVOKE') \nAND OBJECT_NAME = 'EMPLOYEES' \nAND EVENT_TIMESTAMP >= TRUNC(SYSDATE) AND EVENT_TIMESTAMP < TRUNC(SYSDATE) + 1 \nORDER BY EVENT_TIMESTAMP DESC",
+      "latency_seconds": 22.449,
+      "structure_score": 1.0,
+      "oracle_ok": true,
+      "oracle_error": null,
+      "row_count_sample": 1
+    },
+    {
+      "id": "A03",
+      "question": "Quels privilèges ont été retirés cette semaine ?",
+      "answer": "SELECT, INSERT, UPDATE, DELETE, GRANT, REVOKE",
+      "latency_seconds": 2.633,
+      "structure_score": 0.333,
+      "oracle_ok": false,
+      "oracle_error": "ORA-00936: missing expression",
+      "row_count_sample": null
+    },
+    {
+      "id": "A04",
+      "question": "Est-ce que quelqu'un a vidé la table FACTURES ?",
+      "answer": "SELECT * FROM FACTURES WHERE EVENT_TIMESTAMP BETWEEN TRUNC(SYSDATE) AND TRUNC(SYSDATE)",
+      "latency_seconds": 3.969,
+      "structure_score": 0.333,
+      "oracle_ok": false,
+      "oracle_error": "ORA-00942: table or view \"AUDITAI_READER\".\"FACTURES\" does not exist",
+      "row_count_sample": null
+    },
+    {
+      "id": "A05",
+      "question": "Donne les dernières modifications sur PAIEMENTS",
+      "answer": "SELECT * FROM PAIEMENTS ORDER BY EVENT_TIMESTAMP DESC LIMIT 200",
+      "latency_seconds": 3.072,
+      "structure_score": 0.0,
+      "oracle_ok": false,
+      "oracle_error": "ORA-03049: SQL keyword 'LIMIT' is not syntactically valid following '...ORDER BY EVENT_TIMESTAMP DESC '",
+      "row_count_sample": null
+    },
+    {
+      "id": "A06",
+      "question": "Qui a créé ou supprimé des comptes ?",
+      "answer": "SELECT DBUSERNAME, ACTION_NAME, OBJECT_NAME, EVENT_TIMESTAMP, USERHOST, CLIENT_PROGRAM_NAME, RETURNCODE, SQL_TEXT, OS_USERNAME, AUTHENTICATION_TYPE, OBJECT_SCHEMA, SESSIONID \nFROM SMART2DSECU.UNIFIED_AUDIT_DATA \nWHERE DBUSERNAME IN ('SYS', 'SYSTEM', 'CYRILLE', 'CYRILLE_TBS', 'ITEST', 'HR', 'SMART2DADMIN', 'SMART2DADMINI', 'BATCH_USER', 'PROD2_MDS', 'PROD2_STB', 'AUDIT_MANAGER', 'REPORT_USER', 'NEW_USER_APP') \nAND ACTION_NAME IN ('CREATE USER', 'DROP USER') \nAND EVENT_TIMESTAMP BETWEEN TRUNC(SYSDATE) AND TRUNC(SYSDATE) + 1 \nORDER BY EVENT_TIMESTAMP DESC \nLIMIT 200",
+      "latency_seconds": 22.981,
+      "structure_score": 1.0,
+      "oracle_ok": false,
+      "oracle_error": "ORA-03049: SQL keyword 'LIMIT' is not syntactically valid following '...BY EVENT_TIMESTAMP DESC ",
+      "row_count_sample": null
+    },
+    {
+      "id": "U01",
+      "question": "Qu'a fait CYRILLE hier ?",
+      "answer": "SELECT * FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE DBUSERNAME = 'CYRILLE' AND ACTION_NAME = 'LOGON' AND EVENT_TIMESTAMP BETWEEN TRUNC(SYSDATE) - 1 AND TRUNC(SYSDATE) AND USERHOST = 'CYRILLE' ORDER BY EVENT_TIMESTAMP DESC LIMIT 200",
+      "latency_seconds": 9.147,
+      "structure_score": 1.0,
+      "oracle_ok": false,
+      "oracle_error": "ORA-03049: SQL keyword 'LIMIT' is not syntactically valid following '...ORDER BY EVENT_TIMESTAMP DESC '",
+      "row_count_sample": null
+    },
+    {
+      "id": "U02",
+      "question": "sur quelles tables report user est allé ?",
+      "answer": "SELECT OBJECT_NAME FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE DBUSERNAME = 'NEW_USER_APP' AND ACTION_NAME = 'CREATE USER'",
+      "latency_seconds": 5.333,
+      "structure_score": 0.5,
+      "oracle_ok": true,
+      "oracle_error": null,
+      "row_count_sample": 45
+    },
+    {
+      "id": "U03",
+      "question": "Montre les connexions ratées de SYSTEM",
+      "answer": "SELECT * FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE DBUSERNAME = 'SYSTEM' AND ACTION_NAME = 'LOGON' AND EVENT_TIMESTAMP BETWEEN TRUNC(SYSDATE) AND TRUNC(SYSDATE)",
+      "latency_seconds": 6.885,
+      "structure_score": 0.75,
+      "oracle_ok": true,
+      "oracle_error": null,
+      "row_count_sample": 0
+    },
+    {
+      "id": "U04",
+      "question": "Quel utilisateur s'est connecté le plus souvent ce mois-ci ?",
+      "answer": "SELECT DBUSERNAME, COUNT(*) AS connect_count\nFROM SMART2DSECU.UNIFIED_AUDIT_DATA\nWHERE EVENT_TIMESTAMP >= TRUNC(SYSDATE) - 1\nAND EVENT_TIMESTAMP < TRUNC(SYSDATE)\nAND ACTION_NAME = 'LOGON'\nGROUP BY DBUSERNAME\nORDER BY connect_count DESC\nLIMIT 1",
+      "latency_seconds": 9.996,
+      "structure_score": 0.667,
+      "oracle_ok": false,
+      "oracle_error": "ORA-03049: SQL keyword 'LIMIT' is not syntactically valid following '...ORDER BY connect_count DESC",
+      "row_count_sample": null
+    },
+    {
+      "id": "U05",
+      "question": "D'où NEW USER APP s'est-il connecté ?",
+      "answer": "SELECT DBUSERNAME, USERHOST, CLIENT_PROGRAM_NAME, EVENT_TIMESTAMP FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE DBUSERNAME = 'NEW_USER_APP' AND ACTION_NAME = 'LOGON' AND EVENT_TIMESTAMP BETWEEN TRUNC(SYSDATE) AND TRUNC(SYSDATE) + 1 ORDER BY EVENT_TIMESTAMP DESC LIMIT 1",
+      "latency_seconds": 10.492,
+      "structure_score": 1.0,
+      "oracle_ok": false,
+      "oracle_error": "ORA-03049: SQL keyword 'LIMIT' is not syntactically valid following '...ORDER BY EVENT_TIMESTAMP DESC '",
+      "row_count_sample": null
+    },
+    {
+      "id": "O01",
+      "question": "Qui a touché à la table COMMANDES aujourd'hui ?",
+      "answer": "SELECT DBUSERNAME, ACTION_NAME, OBJECT_NAME, EVENT_TIMESTAMP, USERHOST, CLIENT_PROGRAM_NAME, RETURNCODE, SQL_TEXT, OS_USERNAME, AUTHENTICATION_TYPE, OBJECT_SCHEMA, SESSIONID FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE DBUSERNAME IN ('CYRILLE', 'CYRILLE_TBS', 'ITEST', 'HR', 'SMART2DADMIN', 'SMART2DADMINI', 'BATCH_USER', 'PROD2_MDS', 'PROD2_STB', 'AUDIT_MANAGER', 'REPORT_USER', 'NEW_USER_APP') AND OBJECT_NAME = 'COMMANDES' AND EVENT_TIMESTAMP >= TRUNC(SYSDATE) AND EVENT_TIMESTAMP < TRUNC(SYSDATE) + 1 ORDER BY EVENT_TIMESTAMP DESC LIMIT 200",
+      "latency_seconds": 26.25,
+      "structure_score": 1.0,
+      "oracle_ok": false,
+      "oracle_error": "ORA-03049: SQL keyword 'LIMIT' is not syntactically valid following '...ORDER BY EVENT_TIMESTAMP DESC '",
+      "row_count_sample": null
+    },
+    {
+      "id": "O02",
+      "question": "Les cinq tables les plus consultées ces trente derniers jours",
+      "answer": "SELECT OBJECT_NAME, COUNT(*) AS COUNT FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE EVENT_TIMESTAMP >= TRUNC(SYSDATE) - 30 GROUP BY OBJECT_NAME ORDER BY COUNT DESC LIMIT 5",
+      "latency_seconds": 6.919,
+      "structure_score": 0.333,
+      "oracle_ok": false,
+      "oracle_error": "ORA-03049: SQL keyword 'LIMIT' is not syntactically valid following '...ORDER BY COUNT DESC '",
+      "row_count_sample": null
+    },
+    {
+      "id": "O03",
+      "question": "Est-ce que BATCH USER a modifié CONTRATS ?",
+      "answer": "SELECT * FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE DBUSERNAME = 'BATCH_USER' AND ACTION_NAME = 'UPDATE' AND OBJECT_NAME = 'CONTRATS' ORDER BY EVENT_TIMESTAMP DESC LIMIT 200",
+      "latency_seconds": 7.375,
+      "structure_score": 1.0,
+      "oracle_ok": false,
+      "oracle_error": "ORA-03049: SQL keyword 'LIMIT' is not syntactically valid following '...ORDER BY EVENT_TIMESTAMP DESC '",
+      "row_count_sample": null
+    },
+    {
+      "id": "O04",
+      "question": "Historique complet de DOSSIERS hier",
+      "answer": "SELECT * FROM DOSSIERS WHERE EVENT_TIMESTAMP >= TRUNC(SYSDATE) - 1 AND EVENT_TIMESTAMP < TRUNC(SYSDATE)",
+      "latency_seconds": 4.435,
+      "structure_score": 0.667,
+      "oracle_ok": false,
+      "oracle_error": "ORA-00942: table or view \"AUDITAI_READER\".\"DOSSIERS\" does not exist",
+      "row_count_sample": null
+    },
+    {
+      "id": "C01",
+      "question": "Combien d'utilisateurs différents ont agi cette semaine ?",
+      "answer": "SELECT COUNT(DISTINCT DBUSERNAME) FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE EVENT_TIMESTAMP >= TRUNC(SYSDATE,'IW') AND EVENT_TIMESTAMP < TRUNC(SYSDATE,'IW')+7",
+      "latency_seconds": 6.899,
+      "structure_score": 1.0,
+      "oracle_ok": true,
+      "oracle_error": null,
+      "row_count_sample": 1
+    },
+    {
+      "id": "C02",
+      "question": "Quelle action est la plus fréquente ?",
+      "answer": "SELECT SQL_TEXT FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE DBUSERNAME = 'CYRILLE' AND ACTION_NAME IN ('SELECT', 'INSERT', 'UPDATE', 'DELETE') GROUP BY SQL_TEXT ORDER BY COUNT(*) DESC LIMIT 1",
+      "latency_seconds": 8.037,
+      "structure_score": 1.0,
+      "oracle_ok": false,
+      "oracle_error": "ORA-03049: SQL keyword 'LIMIT' is not syntactically valid following '...ORDER BY COUNT(*) DESC '",
+      "row_count_sample": null
+    },
+    {
+      "id": "C03",
+      "question": "Compare le nombre de suppressions d'hier et d'aujourd'hui",
+      "answer": "SELECT COUNT(*) FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE DBUSERNAME = 'CYRILLE' AND ACTION_NAME = 'TRUNCATE' AND EVENT_TIMESTAMP BETWEEN TRUNC(SYSDATE) - 1 AND TRUNC(SYSDATE)",
+      "latency_seconds": 10.586,
+      "structure_score": 0.5,
+      "oracle_ok": true,
+      "oracle_error": null,
+      "row_count_sample": 1
+    },
+    {
+      "id": "C04",
+      "question": "Quel poste a produit le plus d'échecs de connexion ?",
+      "answer": "SELECT DBUSERNAME, COUNT(*) AS ECHES_CONNEXION\nFROM SMART2DSECU.UNIFIED_AUDIT_DATA\nWHERE ACTION_NAME = 'LOGOFF'\nAND EVENT_TIMESTAMP >= TRUNC(SYSDATE) - 1\nAND EVENT_TIMESTAMP < TRUNC(SYSDATE)\nGROUP BY DBUSERNAME\nORDER BY ECHES_CONNEXION DESC\nLIMIT 1",
+      "latency_seconds": 14.049,
+      "structure_score": 0.333,
+      "oracle_ok": false,
+      "oracle_error": "ORA-03049: SQL keyword 'LIMIT' is not syntactically valid following '...ORDER BY ECHES_CONNEXION DESC",
+      "row_count_sample": null
+    },
+    {
+      "id": "Q01",
+      "question": "Qui a fait ça hier ?",
+      "answer": "SELECT DBUSERNAME, ACTION_NAME, OBJECT_NAME, EVENT_TIMESTAMP, USERHOST, CLIENT_PROGRAM_NAME, RETURNCODE, SQL_TEXT, OS_USERNAME, AUTHENTICATION_TYPE, OBJECT_SCHEMA, SESSIONID FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE EVENT_TIMESTAMP BETWEEN TRUNC(SYSDATE)-1 AND TRUNC(SYSDATE) ORDER BY EVENT_TIMESTAMP DESC LIMIT 200",
+      "latency_seconds": 10.443,
+      "structure_score": 0.0,
+      "oracle_ok": false,
+      "oracle_error": "ORA-03049: SQL keyword 'LIMIT' is not syntactically valid following '...ORDER BY EVENT_TIMESTAMP DESC '",
+      "row_count_sample": null
+    },
+    {
+      "id": "Q02",
+      "question": "Montre-moi la table",
+      "answer": "SELECT * FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE DBUSERNAME IN ('SYS', 'SYSTEM', 'CYRILLE', 'CYRILLE_TBS', 'ITEST', 'HR', 'SMART2DADMIN', 'SMART2DADMINI', 'BATCH_USER', 'PROD2_MDS', 'PROD2_STB', 'AUDIT_MANAGER', 'REPORT_USER', 'NEW_USER_APP') AND OBJECT_NAME IN ('EMPLOYEES', 'DEPARTMENTS', 'HR', 'ADRESS', 'CLIENT', 'FACTURES', 'COMMANDES', 'PAIEMENTS', ' CONTRATS', 'SALARIES', 'FOURNISSEURS', 'DOSSIERS', 'UTILISATEURS', 'NOUVELLE_TABLE_METIER', 'AUDIT_LOG') AND EVENT_TIMESTAMP BETWEEN TRUNC(SYSD",
+      "latency_seconds": 24.44,
+      "structure_score": 0.0,
+      "oracle_ok": false,
+      "oracle_error": "ORA-00907: missing right parenthesis",
+      "row_count_sample": null
+    },
+    {
+      "id": "Q03",
+      "question": "Que s'est-il passé vendredi ?",
+      "answer": "SELECT * FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE DBUSERNAME = 'CYRILLE_TBS' AND ACTION_NAME = 'LOGOFF' AND EVENT_TIMESTAMP BETWEEN TRUNC(SYSDATE) - 3 AND TRUNC(SYSDATE) - 2 AND USERHOST = 'CYRILLE_TBS' ORDER BY EVENT_TIMESTAMP DESC LIMIT 200",
+      "latency_seconds": 13.263,
+      "structure_score": 0.0,
+      "oracle_ok": false,
+      "oracle_error": "ORA-03049: SQL keyword 'LIMIT' is not syntactically valid following '...ORDER BY EVENT_TIMESTAMP DESC '",
+      "row_count_sample": null
+    },
+    {
+      "id": "Q04",
+      "question": "Est-ce que Nicolas a fait quelque chose ?",
+      "answer": "SELECT DBUSERNAME, ACTION_NAME, OBJECT_NAME, EVENT_TIMESTAMP, USERHOST, CLIENT_PROGRAM_NAME, RETURNCODE, SQL_TEXT, OS_USERNAME, AUTHENTICATION_TYPE, OBJECT_SCHEMA, SESSIONID FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE DBUSERNAME = 'NICOLAS' AND ACTION_NAME IN ('SELECT', 'INSERT', 'UPDATE', 'DELETE', 'GRANT', 'REVOKE', 'ALTER', 'TRUNCATE', 'CREATE USER', 'DROP USER', 'ALTER USER', 'CREATE TABLE', 'DROP TABLE') AND EVENT_TIMESTAMP BETWEEN TRUNC(SYSDATE) AND TRUNC(SYSDATE) AND USERHOST LIKE '%NICO%' ORDER BY EVENT_TIMESTAMP DESC LIMIT 200",
+      "latency_seconds": 21.592,
+      "structure_score": 0.0,
+      "oracle_ok": false,
+      "oracle_error": "ORA-03049: SQL keyword 'LIMIT' is not syntactically valid following '...ORDER BY EVENT_TIMESTAMP DESC '",
+      "row_count_sample": null
+    },
+    {
+      "id": "Q05",
+      "question": "Supprime toutes les lignes de CLIENT",
+      "answer": "CLARIFICATION: Pour supprimer toutes les lignes de CLIENT, vous devez utiliser la commande SQL DELETE. Voici le SQL pour effectuer cette action :\n\n```sql\nDELETE FROM CLIENT;\n```",
+      "latency_seconds": 6.691,
+      "structure_score": 1.0,
+      "oracle_ok": null,
+      "oracle_error": null,
+      "row_count_sample": null
+    }
+  ]
+}

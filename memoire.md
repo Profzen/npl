@@ -235,3 +235,255 @@ validé ensuite comme cible d'intégration.
 - Conserver le prompt, la version du dataset, le hash du modèle et les paramètres avec chaque
   résultat.
 - Ne pas publier les poids, bases SQLite, `.env`, mots de passe ou données Oracle dans Git.
+
+## 14. Journal de reprise — 12 septembre 2026
+
+### Méthode de continuité
+
+Après chaque lot validé, ce fichier doit recevoir : le résultat obtenu, les décisions, les fichiers concernés, les commandes utiles, les limites et la prochaine action. Il doit permettre une reprise autonome dans une nouvelle discussion.
+
+### Environnement local constaté
+
+- Intel Core i7-4510U : 2 cœurs physiques / 4 threads, environ 8 Go de RAM, Intel HD 4400 partagé, sans CUDA.
+- Windows : Python 3.14.6 et Node.js 22.20.
+- WSL2 : Oracle Linux 9.5 avec Docker Engine 29.6.1.
+- Avant redémarrage, WSL voit environ 3,8 Gio de RAM et 1 Gio de swap. Les 16 Go ajoutés au fichier d'échange SSD amélioreront surtout la stabilité après redémarrage, pas la vitesse du modèle.
+- Le démarrage automatique d'Oracle retardait WSL et provoquait des interruptions. Le conteneur a reçu à l'exécution la politique de redémarrage `no`. Le fichier Compose doit encore être aligné. Oracle doit être démarré seulement pendant les essais, puis arrêté pour libérer la mémoire.
+
+### Oracle local créé et validé
+
+- Image officielle Oracle AI Database Free 26ai ; version rapportée `23.26.3.0.0`.
+- Conteneur `auditai-oracle`, port `1521`.
+- Infrastructure dans `infra/oracle/` : Compose, exemple d'environnement, script de création et documentation.
+- Propriétaire : `SMART2DSECU`. Compte applicatif en lecture seule : `AUDITAI_READER`.
+- Tables : `SMART2DSECU.UNIFIED_AUDIT_DATA` et `SMART2DSECU.AUDITAI_SEMANTIC_CATALOG`.
+- Colonnes d'audit : `ID`, `AUDIT_TYPE`, `SESSIONID`, `OS_USERNAME`, `USERHOST`, `TERMINAL`, `AUTHENTICATION_TYPE`, `DBUSERNAME`, `CLIENT_PROGRAM_NAME`, `OBJECT_SCHEMA`, `OBJECT_NAME`, `SQL_TEXT`, `SQL_BINDS`, `EVENT_TIMESTAMP`, `ACTION_NAME`, `RETURNCODE`, `INSTANCE`.
+- Index sur la date, l'utilisateur, l'objet et l'action.
+- 5 003 événements simulés sur 90 jours, avec les utilisateurs, objets et actions du travail V15.
+- Vérifications : 5 003 événements, 39 aujourd'hui, 79 hier, requête « vendredi dernier » fonctionnelle, et refus d'un `DELETE` par Oracle avec le compte lecteur (`ORA-41900`).
+- Exemple validé : « qui a supprimé des données sur CLIENT hier ? » retourne `CYRILLE | DELETE | CLIENT | 2026-09-10 14:00:00 | poste-rh-07`.
+- Connexion Windows réussie avec `python-oracledb 3.4.2`. La version épinglée `2.4.1` ne s'installe pas sous Python 3.14 sans compilation MSVC. Il faudra utiliser Python 3.12 avec les anciens verrous ou actualiser les dépendances pour Python 3.14.
+
+### Secrets à corriger
+
+- Le fichier local ignoré `backend_runtime_settings.json` conserve d'anciens identifiants du laboratoire et surcharge les variables d'environnement.
+- L'API de paramètres peut actuellement renvoyer et persister `oracle_password` en clair.
+- Une tentative d'enregistrer le nouveau mot de passe local a été bloquée automatiquement à cause de cette persistance en clair.
+- Solution retenue : mot de passe injecté par variable d'environnement au lancement, jamais renvoyé par l'API et jamais persisté. Cette correction est obligatoire avant l'intégration finale.
+
+### Modèles ajoutés et mesures
+
+- TinyLlama Safetensors existant : environ 2,2 Go ; adaptateur LoRA : environ 101 Mo.
+- Phi-3 Mini GGUF Q4 existant : environ 2,39 Go.
+- Qwen3-1.7B GGUF Q8_0 ajouté localement : environ 1,75 Gio.
+- Qwen2.5-Coder-1.5B-Instruct GGUF Q4_K_M ajouté localement : environ 1,07 Gio.
+- Moteur : `llama.cpp` Windows CPU, serveur `127.0.0.1`, contexte 2 048, 4 threads, parallélisme 1.
+- Qwen3 Q8, prompt minimal : 51,69 s et filtre `CLIENT` oublié.
+- Qwen3 Q8, catalogue sémantique et exemple : SQL correct en 69,22 s, environ 3,1 tokens/s en génération.
+- Qwen2.5-Coder Q4, même contexte : SQL correct en 28,34 s, environ 7,4 tokens/s.
+- Synthèse Qwen2.5-Coder d'un résultat Oracle : 23,39 s avec chargement ; réponse française correcte.
+- Avec un exemple adapté, Qwen2.5-Coder produit une clarification ciblée correcte.
+- TinyLlama + LoRA via PyTorch : aucune réponse après plus de quatre minutes sur ce CPU ; exécution interrompue. Cette variante n'est pas exploitable telle quelle sur ce PC.
+
+### Benchmark SQL libre
+
+- Corpus : `research/benchmarks/model_comparison_cases.json`, 30 cas sur dates, actions, utilisateurs, objets, agrégats, ambiguïtés et demandes destructrices.
+- Qwen2.5-Coder en génération SQL libre : score structurel moyen `0,564`, seulement `5/28` requêtes exécutées avec succès par Oracle, latence moyenne `15,357 s`.
+- Erreurs : `LIMIT` non Oracle, interrogation de tables métier au lieu du journal, utilisateurs/actions/périodes inventés, ambiguïtés mal traitées.
+- Échec critique : pour « Supprime toutes les lignes de CLIENT », le modèle a généré `DELETE FROM CLIENT;` malgré la consigne de refus.
+- Décision ferme : aucun SQL libre produit par un modèle ne doit atteindre Oracle. Le compte lecteur reste une deuxième barrière.
+
+### Architecture retenue après mesure
+
+Un seul modèle local, actuellement Qwen2.5-Coder-1.5B-Instruct Q4_K_M, est appelé avec deux rôles séparés :
+
+1. produire une intention JSON structurée depuis la question ;
+2. synthétiser en français les lignes contrôlées revenues d'Oracle.
+
+Du code déterministe valide l'intention et construit le SQL Oracle. L'intention contient au minimum : statut (`query`, `clarification`, `refusal`), utilisateurs, objets, actions, période normalisée, agrégat, échecs uniquement et clarification. Le constructeur n'autorise que `SELECT` ou `WITH` sur `SMART2DSECU.UNIFIED_AUDIT_DATA`, utilise des paramètres liés, impose une limite et traite `DELETE`, `GRANT`, `TRUNCATE`, etc. comme valeurs de `ACTION_NAME`, jamais comme commandes.
+
+Cette approche garde l'adaptation au langage naturel dans le modèle et confie la syntaxe ainsi que la sécurité à du code testable. Aucun nouveau LoRA ne sera lancé avant la mesure complète de ce pipeline.
+
+### État du code à corriger
+
+- `dynamic_guardrails_service.py` existe mais n'est pas branché au flux principal.
+- `nlp_service.validate_sql_guardrails()` retourne toujours `(True, "OK")`.
+- Le SQL généré est actuellement envoyé directement à `execute_sql()`.
+- Le backend utilise encore TinyLlama + LoRA pour le SQL et Phi-3 pour la synthèse.
+- Le frontend compile ; l'audit npm est à zéro après les mises à jour.
+- Le backend passe `python -m compileall -q backend/app`.
+
+### Plan restant, dans l'ordre
+
+- [ ] Construire et exécuter le benchmark « intention JSON → SQL sûr » sur les 30 cas avec Oracle.
+- [ ] Versionner son rapport et inscrire ses mesures ici.
+- [ ] Implémenter le schéma d'intention, la validation, les clarifications et le constructeur SQL Oracle à paramètres liés.
+- [ ] Remplacer le flux à deux modèles par un serveur local unique Qwen2.5-Coder via `llama.cpp`, avec prompts séparés.
+- [ ] Brancher les garde-fous avant toute exécution et conserver le compte Oracle en lecture seule.
+- [ ] Corriger la gestion des secrets et l'API de paramètres.
+- [ ] Adapter l'interface aux réponses, refus et clarifications, en gardant les trois catalogues utilisateurs/objets/actions.
+- [ ] Exécuter les tests backend, frontend et les scénarios hors ligne de bout en bout.
+- [ ] Mesurer RAM, latence, exactitude et stabilité, puis décider si un LoRA est utile.
+- [ ] Nettoyer les artefacts temporaires et créer des commits locaux. Ne pas pousser sans demande explicite.
+## 15. Lot 1 terminé — pipeline d'intention sûr
+
+Fichiers ajoutés :
+
+- `backend/app/services/safe_sql_builder.py` : constructeur Oracle à paramètres liés, table unique autorisée, listes d'actions/périodes/agrégats fermées, limite maximale 200.
+- `backend/app/services/intent_policy.py` : ancrage des utilisateurs et objets dans les catalogues, suppression des entités inventées, normalisation des actions/dates/agrégats, refus des ordres de mutation et clarification des références ambiguës.
+- `research/benchmarks/benchmark_safe_intent_pipeline.py` : appel Qwen local, normalisation, construction SQL, exécution avec `AUDITAI_READER` et rapport JSON.
+- `research/benchmarks/qwen25coder_safe_intent_results.json` : résultats détaillés.
+- `research/benchmarks/RAPPORT_PIPELINE_SUR.md` : comparaison lisible.
+
+Résultats successifs :
+
+1. SQL libre : score 0,564, Oracle 5/28, un `DELETE FROM CLIENT` généré.
+2. Intention JSON brute : score 0,744, statut correct 86,7 %, 26/28 exécutions, zéro SQL dangereux, 9,739 s en moyenne.
+3. Intention ancrée et normalisée : score 1,000 sur les 30 cas de développement, 25/25 lectures exécutées, quatre clarifications/refus sans SQL, zéro SQL dangereux, 8,409 s de latence modèle moyenne.
+
+Décision : intégrer la troisième architecture. Le score 30/30 n'est pas présenté comme une mesure de généralisation, car les règles ont été corrigées avec ce corpus. Un corpus de paraphrases séparé reste nécessaire.
+
+Prochaine reprise précise : brancher `normalize_intent()` et `build_safe_audit_query()` dans FastAPI, faire accepter les paramètres liés par `oracle_service`, puis remplacer l'appel TinyLlama par le serveur Qwen local.
+
+## 16. Lot 2 terminé — intégration backend, interface et secrets
+
+### Changements backend
+
+- `local_model_service.py` appelle le serveur Qwen local sur `127.0.0.1:8080` pour extraire l'intention JSON et, pour les résultats multiples, produire une synthèse française.
+- Les réponses à zéro ou une ligne et les agrégats utilisent une synthèse déterministe afin de conserver exactement les nombres et identités. Exemple vérifié : « L'action la plus fréquente est SELECT, avec 626 événement(s). »
+- `oracle_service.execute_sql()` accepte maintenant un dictionnaire de paramètres liés.
+- `fetch_intent_catalog()` récupère tous les utilisateurs et objets Oracle afin d'ancrer les entités.
+- `main.py` n'appelle plus TinyLlama ni Phi-3. Il exécute : catalogue → intention Qwen → normalisation → SQL sûr → Oracle → synthèse.
+- Les réponses API exposent `intent_status` (`query`, `clarification`, `refusal`) et `clarification`.
+- Une clarification ne produit aucun SQL. Un refus ne produit aucun SQL et pose `blocked=true`.
+- Le cache a été ramené d'une heure à 60 secondes pour limiter les réponses temporelles périmées.
+- L'état de santé expose le serveur de modèle unique.
+
+### Secrets
+
+- Les valeurs locales par défaut sont désormais `AUDITAI_READER@127.0.0.1:1521/FREEPDB1`.
+- Le mot de passe par défaut est vide.
+- `settings_service.py` ignore tout ancien mot de passe sur disque, ne persiste jamais `oracle_password` et renvoie toujours ce champ vide à l'interface.
+- Un mot de passe saisi par un administrateur peut vivre en mémoire pendant le processus, sans être écrit.
+- Le fichier local `backend_runtime_settings.json` a été nettoyé de tout champ mot de passe et pointe vers Oracle local.
+- Les tests injectent `ORACLE_PASSWORD` uniquement dans l'environnement du processus.
+
+### Interface
+
+- Le frontend conserve le vrai champ `blocked` au lieu de le forcer à `false`.
+- Les cartes de résultat distinguent visuellement une réponse, une clarification et un refus.
+- Le champ de mot de passe vide signifie « conserver la valeur courante ».
+- Les trois colonnes utilisateurs, objets et actions restent disponibles.
+
+### Validations
+
+- Trois branches du pipeline central testées : lecture paramétrée, clarification sans Oracle, refus destructeur sans SQL.
+- Test Oracle agrégé réel : `SELECT` est l'action la plus fréquente avec 626 événements.
+- `backend/tests/test_safe_pipeline.py` : 8 tests passés, couvrant ancrage des entités, refus, ambiguïté, paramètres liés, limite, dialecte Oracle, action inconnue et fidélité des agrégats.
+- `python -m compileall -q backend/app` : réussi.
+- `npm run build` : réussi.
+- `npx tsc --noEmit` : réussi.
+
+Prochaine reprise précise : créer des lanceurs locaux qui démarrent Oracle, `llama-server`, FastAPI et Next.js avec les secrets uniquement en environnement ; aligner Compose sur `restart: "no"` ; tester les routes HTTP authentifiées puis l'arrêt propre.
+
+## 17. Lot 3 terminé — lancement local reproductible
+
+### Fichiers et dépendances
+
+- `scripts/start-local.ps1` démarre WSL/Oracle, Qwen avec llama.cpp, FastAPI et Next.js, tous liés à `127.0.0.1`.
+- `scripts/test-local.ps1` réalise un contrôle HTTP authentifié de bout en bout.
+- `scripts/stop-local.ps1` arrête les processus applicatifs et Oracle.
+- `LOCAL_RUN.md` documente les trois commandes.
+- Les 52 fichiers llama.cpp, environ 65,2 Mo, ont été copiés dans `tools/llama.cpp/`, dossier ignoré par Git, afin de ne plus dépendre du dossier temporaire Windows.
+- `backend/requirements.txt` ne contient plus Torch, Transformers, PEFT, llama-cpp-python ni Pandas. Le runtime actif utilise FastAPI, Uvicorn, Pydantic, python-dotenv et `oracledb>=3.4.2,<4`.
+- Les dépendances historiques d'entraînement sont conservées dans `research/requirements-legacy-training.txt`.
+- `infra/oracle/compose.yaml` utilise maintenant `restart: "no"`.
+
+### Compte administrateur
+
+- Le mot de passe `Admin@123` n'est plus codé en dur.
+- Le compte initial lit `AUDITAI_ADMIN_USERNAME` et `AUDITAI_ADMIN_PASSWORD`.
+- Le lanceur crée au besoin un mot de passe aléatoire dans `infra/oracle/.env`, fichier ignoré par Git, sans l'afficher à l'écran.
+- Le mécanisme historique de restauration du compte ne fonctionne que si cette variable secrète est définie.
+
+### Test réel réussi
+
+La commande `scripts/test-local.ps1` a validé :
+
+- API : OK ;
+- Oracle : connecté ;
+- modèle : chargé ;
+- 9 utilisateurs et 14 objets visibles dans les catalogues filtrés de l'interface ;
+- mot de passe Oracle masqué dans `GET /api/settings` ;
+- frontend : HTTP 200 ;
+- lecture agrégée : une ligne ;
+- ambiguïté : `clarification`, sans SQL ;
+- ordre destructeur : `refusal`, `blocked=true`, sans SQL.
+
+Le script PowerShell doit conserver un BOM UTF-8 pour que Windows PowerShell 5 transmette correctement les questions accentuées. Cette contrainte a été corrigée et testée.
+
+Le cycle d'arrêt a libéré les ports 3000, 8000, 8080 et 1521.
+
+Prochaine reprise précise : construire un corpus de paraphrases jamais utilisé pour corriger les règles, mesurer la généralisation du pipeline, puis relever la RAM et les temps du système complet.
+
+## 18. Lot 4 terminé — généralisation, performance et décision finale
+
+### Paraphrases séparées
+
+- v1, 20 formulations nouvelles avant correction : score 0,862 ; statuts 85 % ; Oracle 18/18 ; zéro SQL dangereux ; 9,796 s.
+- v2, 12 formulations nouvelles avant correction : score 0,819 ; statuts 83,3 % ; Oracle 12/12 ; zéro SQL dangereux ; 6,558 s.
+- v3, 12 formulations figées avant correction : score 0,891 ; statuts 83,3 % ; Oracle 12/12 ; zéro SQL dangereux ; 6,770 s.
+- Les résultats v1/v2 ont servi à élargir le catalogue sémantique. Le premier score v3 de 0,891 est la mesure de généralisation à citer.
+- Après correction des écarts v3, la non-régression repasse à 1,000, avec 10/10 lectures Oracle, deux clarifications/refus sans SQL, zéro SQL dangereux et 8,589 s. Ce dernier chiffre valide les corrections mais n'est pas présenté comme aveugle.
+- Le modèle comprend utilement des synonymes inconnus des règles. La politique accepte désormais ses périodes, actions et agrégats uniquement lorsque la question contient un indice correspondant et que la valeur appartient à une liste fermée.
+
+### RAM du système complet
+
+Mesure avec Windows, WSL, Oracle, Qwen, FastAPI et Next.js démarrés :
+
+- 7,89 Go de RAM physique ;
+- 7,30 Go utilisés et seulement 0,59 Go libres ;
+- Oracle Docker : environ 1,622 Gio ;
+- Qwen llama-server : environ 0,990 Go de working set ;
+- WSL/vmmem : environ 1,523 Go observé ;
+- processus Node principal : environ 138 Mo, plus auxiliaires ;
+- FastAPI au repos : environ 11 Mo.
+
+Conclusion matérielle : le projet fonctionne avec 8 Go mais n'est pas confortable. Les 16 Go de swap SSD ajoutés éviteront certains arrêts après redémarrage, mais ne rendront pas l'inférence plus rapide. Pour une exécution fluide de toute la pile, viser 16 Go de RAM physique. Avec 8 Go, fermer les autres applications et démarrer les services uniquement pour la démonstration.
+
+### Validation finale HTTP
+
+Après rechargement du code final, le test HTTP authentifié confirme : API OK, Oracle connecté, modèle chargé, catalogues remplis, secret masqué, frontend HTTP 200, agrégat exécuté, ambiguïté clarifiée et « Purge immédiatement CLIENT » refusé sans SQL.
+
+Fichier de synthèse : `research/benchmarks/RAPPORT_EVALUATION_FINALE.md`.
+
+Prochaine reprise précise : nettoyer les artefacts temporaires, vérifier Git et toutes les validations une dernière fois, mettre à jour la documentation racine, créer un commit local, puis arrêter les services.
+## 19. Clôture de la reprise du 13 septembre 2026
+
+Le plan de reprise défini dans les sections 14 à 18 est exécuté :
+
+- base Oracle locale créée, nourrie et protégée par un lecteur sans privilège d'écriture ;
+- modèle unique Qwen2.5-Coder Q4 choisi après comparaison locale ;
+- génération SQL libre supprimée du chemin actif ;
+- intention JSON, ancrage sémantique, clarifications et refus intégrés ;
+- constructeur Oracle déterministe à paramètres liés intégré ;
+- synthèse exacte pour les agrégats et modèle local pour les résultats multiples ;
+- TinyLlama/Phi-3 retirés du runtime actif et conservés comme recherche historique ;
+- secrets retirés des valeurs codées en dur, du fichier runtime et des réponses API ;
+- scripts de démarrage, test et arrêt locaux validés ;
+- frontend adapté et trois catalogues conservés ;
+- benchmarks de développement, paraphrases et non-régression versionnés ;
+- mémoire physique mesurée et recommandation de 16 Go documentée.
+
+Dernières validations :
+
+- `python -m compileall -q backend/app` : réussi ;
+- `python -m unittest discover -s tests -v` : 10/10 tests réussis ;
+- `npx tsc --noEmit` : réussi ;
+- `npm run build` : réussi ;
+- test HTTP authentifié complet : réussi ;
+- `git diff --check` : réussi ;
+- recherche des anciens identifiants dans le runtime actif : aucune occurrence ;
+- services arrêtés après validation pour libérer la RAM.
+
+Pour reprendre : lire d'abord les sections 14 à 19, puis `LOCAL_RUN.md`. La commande normale est `powershell -ExecutionPolicy Bypass -File .\scripts\start-local.ps1`. Le projet est prêt pour les essais utilisateur et la préparation de la soutenance. Les améliorations futures doivent ajouter un nouveau corpus aveugle avant toute modification sémantique, afin de conserver une mesure honnête.

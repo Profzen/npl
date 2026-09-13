@@ -25,8 +25,9 @@ export interface LoginResponse {
 export interface HealthStatus {
   status: string
   oracle: 'connected' | 'disconnected'
-  tinyllama: 'loaded' | 'error'
-  phi3: 'loaded' | 'error'
+  model: 'loaded' | 'error'
+  tinyllama?: 'disabled'
+  phi3?: 'disabled'
 }
 
 // Metadata types
@@ -58,6 +59,8 @@ export interface QueryResponse {
   rows: Record<string, unknown>[]
   row_count: number
   blocked: boolean
+  intent_status?: 'query' | 'clarification' | 'refusal'
+  clarification?: string | null
   error: string | null
 }
 

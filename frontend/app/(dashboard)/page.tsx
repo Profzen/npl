@@ -385,8 +385,18 @@ export default function HomePage() {
                     </CardContent>
                   </Card>
 
-                  <Card className="shadow-sm border-2 border-status-success">
-                    <CardContent className="py-3 px-3 bg-status-success/5">
+                  <Card className={cn(
+                    "shadow-sm border-2",
+                    result.intent_status === "refusal" && "border-status-error",
+                    result.intent_status === "clarification" && "border-primary",
+                    (!result.intent_status || result.intent_status === "query") && "border-status-success"
+                  )}>
+                    <CardContent className={cn(
+                      "py-3 px-3",
+                      result.intent_status === "refusal" && "bg-status-error/5",
+                      result.intent_status === "clarification" && "bg-primary/5",
+                      (!result.intent_status || result.intent_status === "query") && "bg-status-success/5"
+                    )}>
                       <p className="text-base font-bold leading-relaxed text-foreground flex items-start gap-2">
                         <Zap className="w-4 h-4 text-status-success mt-1 shrink-0" />
                         <span>{t('dashboard.synthesis_label')}: {result.synthesis}</span>

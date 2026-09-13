@@ -1,5 +1,14 @@
 # Audit AI — Documentation technique d’intégration
 
+> **Version locale actuelle (13 septembre 2026)** : le pipeline actif utilise Qwen2.5-Coder
+> via llama.cpp pour produire une intention JSON, puis un constructeur déterministe génère
+> uniquement du SQL Oracle paramétré en lecture. Consultez [LOCAL_RUN.md](LOCAL_RUN.md) pour
+> démarrer et [memoire.md](memoire.md) pour l'état réel, les résultats et la reprise.
+>
+> Les sections historiques TinyLlama/Phi-3 ci-dessous sont conservées comme trace du mémoire ;
+> elles ne décrivent plus le chemin d'exécution actif.
+
+
 > Ce document décrit l’architecture réelle, le démarrage, les flux, les services backend, l’interface, les modèles locaux, la connexion Oracle, les données SQLite, les procédures de déploiement, de mise à jour et de dépannage de la plateforme **Audit AI**.
 >
 > Il est destiné à la personne chargée d’intégrer, déployer, exploiter ou maintenir le projet. Il doit rester à la racine du dossier livré.

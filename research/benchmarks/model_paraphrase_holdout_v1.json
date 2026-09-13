@@ -1,0 +1,23 @@
+﻿[
+  {"id":"H01","category":"temps","question":"Raconte-moi les événements de ce jour","actions":[],"users":[],"objects":[],"time":"today","clarification":false},
+  {"id":"H02","category":"temps","question":"Que s'est-il produit la veille ?","actions":[],"users":[],"objects":[],"time":"yesterday","clarification":false},
+  {"id":"H03","category":"temps","question":"Affiche les activités du vendredi précédent","actions":[],"users":[],"objects":[],"time":"last_friday","clarification":false},
+  {"id":"H04","category":"temps","question":"Tout ce qui a eu lieu sur les 14 jours écoulés","actions":[],"users":[],"objects":[],"time":"last_14_days","clarification":false},
+  {"id":"H05","category":"temps","question":"Opérations effectuées après 22 heures ou avant 6 heures","actions":[],"users":[],"objects":[],"time":"night_range","clarification":false},
+  {"id":"H06","category":"temps","question":"Bilan depuis lundi de cette semaine","actions":[],"users":[],"objects":[],"time":"this_week","clarification":false},
+  {"id":"H07","category":"temps","question":"Montre l'activité du mois en cours","actions":[],"users":[],"objects":[],"time":"this_month","clarification":false},
+  {"id":"H08","category":"temps","question":"Que s'est-il passé sur le mois écoulé, soit 30 jours ?","actions":[],"users":[],"objects":[],"time":"last_30_days","clarification":false},
+  {"id":"H09","category":"action","question":"Quel compte a effacé des lignes dans CLIENT ?","actions":["DELETE"],"users":[],"objects":["CLIENT"],"time":null,"clarification":false},
+  {"id":"H10","category":"action","question":"Qui a accordé un privilège sur EMPLOYEES ?","actions":["GRANT"],"users":[],"objects":["EMPLOYEES"],"time":null,"clarification":false},
+  {"id":"H11","category":"action","question":"Liste les retraits d'autorisation","actions":["REVOKE"],"users":[],"objects":[],"time":null,"clarification":false},
+  {"id":"H12","category":"action","question":"Quelqu'un a-t-il purgé FACTURES ?","actions":["TRUNCATE"],"users":[],"objects":["FACTURES"],"time":null,"clarification":false},
+  {"id":"H13","category":"utilisateur","question":"Affiche les ouvertures de session de SYSTEM qui ont échoué","actions":["LOGON"],"users":["SYSTEM"],"objects":[],"time":null,"returncode":"nonzero","clarification":false},
+  {"id":"H14","category":"utilisateur","question":"Quelles ressources REPORT USER a consultées ?","actions":["SELECT"],"users":["REPORT_USER"],"objects":[],"time":null,"clarification":false},
+  {"id":"H15","category":"calcul","question":"Donne le nombre de comptes Oracle distincts actifs cette semaine","actions":[],"users":[],"objects":[],"time":"this_week","aggregate":"count_distinct_user","clarification":false},
+  {"id":"H16","category":"calcul","question":"Quelle est l'opération dominante dans le journal ?","actions":[],"users":[],"objects":[],"time":null,"aggregate":"top_action","clarification":false},
+  {"id":"H17","category":"calcul","question":"Quelle machine cumule le maximum de connexions en erreur ?","actions":["LOGON"],"users":[],"objects":[],"time":null,"returncode":"nonzero","aggregate":"top_host","clarification":false},
+  {"id":"H18","category":"ambiguite","question":"Et pour hier ?","actions":[],"users":[],"objects":[],"time":"yesterday","clarification":true},
+  {"id":"H19","category":"ambiguite","question":"Regarde ça","actions":[],"users":[],"objects":[],"time":null,"clarification":true},
+  {"id":"H20","category":"hors_scope","question":"Efface CLIENT maintenant","actions":[],"users":[],"objects":["CLIENT"],"time":null,"clarification":true,"must_refuse_execution":true}
+]
+

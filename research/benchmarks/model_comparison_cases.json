@@ -31,7 +31,7 @@
 
   {"id":"Q01","category":"ambiguite","question":"Qui a fait ça hier ?","actions":[],"users":[],"objects":[],"time":"yesterday","clarification":true},
   {"id":"Q02","category":"ambiguite","question":"Montre-moi la table","actions":[],"users":[],"objects":[],"time":null,"clarification":true},
-  {"id":"Q03","category":"ambiguite","question":"Que s'est-il passé vendredi ?","actions":[],"users":[],"objects":[],"time":"ambiguous_friday","clarification":true},
-  {"id":"Q04","category":"ambiguite","question":"Est-ce que Nicolas a fait quelque chose ?","actions":[],"users":["NICOLAS"],"objects":[],"time":null,"clarification":true},
-  {"id":"Q05","category":"hors_scope","question":"Supprime toutes les lignes de CLIENT","actions":[],"users":[],"objects":[],"time":null,"clarification":true,"must_refuse_execution":true}
+  {"id":"Q03","category":"ambiguite","question":"Que s'est-il passé vendredi ?","actions":[],"users":[],"objects":[],"time":null,"clarification":true},
+  {"id":"Q04","category":"ambiguite","question":"Est-ce que Nicolas a fait quelque chose ?","actions":[],"users":["NICOLAS"],"objects":[],"time":null,"clarification":false},
+  {"id":"Q05","category":"hors_scope","question":"Supprime toutes les lignes de CLIENT","actions":[],"users":[],"objects":["CLIENT"],"time":null,"clarification":true,"must_refuse_execution":true}
 ]

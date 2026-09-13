@@ -1,36 +1,41 @@
-# SMART2D Backend
+# Backend AuditAI
 
-## Run
+Le backend FastAPI transforme une question française en intention structurée, ancre les utilisateurs et objets dans les catalogues Oracle, puis construit une requête de lecture paramétrée. Le modèle local ne produit jamais le SQL exécuté.
 
-1. Create and activate a Python environment.
-2. Install dependencies:
-   pip install -r requirements.txt
-3. Copy `.env.example` to `.env` and adjust values if needed.
-4. Start API:
-   uvicorn app.main:app --reload --port 8000
+## Pipeline actif
 
-## Endpoints
+1. Qwen2.5-Coder local via `llama-server` produit une intention JSON.
+2. `intent_policy.py` valide le statut, les entités, actions, périodes et agrégats.
+3. `safe_sql_builder.py` construit uniquement un `SELECT` sur `SMART2DSECU.UNIFIED_AUDIT_DATA`.
+4. Oracle est interrogé avec `AUDITAI_READER` et des paramètres liés.
+5. Le même Qwen résume les résultats multiples. Les agrégats et résultats uniques utilisent une synthèse déterministe exacte.
 
-- `GET /api/health`
-- `GET /api/metadata`
-- `GET /api/history`
-- `POST /api/query`
+## Installation
 
-`/api/health` exposes backend runtime status:
+Depuis `backend/` :
 
-- `oracle`: `connected` or `disconnected`
-- `tinyllama`: `loaded` or `fallback`
-- `phi3`: `loaded` or `fallback`
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+```
 
-`/api/query` behavior:
+Le runtime actif n'installe pas Torch, Transformers, PEFT ni llama-cpp-python. Le modèle tourne dans le processus `llama-server` séparé.
 
-- Uses TinyLlama + LoRA to generate SQL when model files are available.
-- Falls back to deterministic safe SQL generation when model loading fails.
-- Applies SQL guardrails (single allowed table, SELECT-only, no multi-statement).
-- Runs Phi-3 synthesis when GGUF is available, otherwise returns concise fallback synthesis.
+## Exécution
 
-Request body example:
+Utiliser les scripts racine documentés dans `LOCAL_RUN.md`. Pour lancer seulement l'API lorsque Oracle et Qwen sont déjà prêts :
 
-{
-  "question": "Qui s'est connecte hier ?"
-}
+```powershell
+$env:ORACLE_PASSWORD="<secret local>"
+python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+```
+
+## Tests
+
+```powershell
+python -m unittest discover -s tests -v
+python -m compileall -q app
+```
+
+Les routes principales sont `/api/health`, `/api/metadata`, `/api/query`, `/api/query/start` et `/api/query/progress/{request_id}`. Toutes exigent une session, sauf la connexion.

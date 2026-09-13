@@ -204,7 +204,7 @@ def get_connection():
     return pool.acquire()
 
 
-def execute_sql(sql: str) -> tuple[list[dict], str | None]:
+def execute_sql(sql: str, binds: dict | None = None) -> tuple[list[dict], str | None]:
     """Exécute uniquement le SQL produit par le modèle, sans ajout de filtre métier.
 
     Les filtres d'affichage des colonnes Users/Tables ne doivent pas modifier les vraies réponses.
@@ -214,7 +214,7 @@ def execute_sql(sql: str) -> tuple[list[dict], str | None]:
     try:
         conn = get_connection()
         cur = conn.cursor()
-        cur.execute(sql.rstrip().rstrip(";"))
+        cur.execute(sql.rstrip().rstrip(";"), binds or {})
         cols = [d[0].upper() for d in cur.description]
         rows = cur.fetchall()
         payload = [dict(zip(cols, row)) for row in rows]
@@ -293,3 +293,32 @@ def fetch_metadata() -> tuple[list[dict], list[dict], str]:
         _METADATA_CACHE = (users, objects, status, time_module.time())
 
     return users, objects, status
+
+
+def fetch_intent_catalog() -> tuple[list[str], list[str]]:
+    """Return complete entity catalogs used to ground model output."""
+    conn = None
+    cur = None
+    try:
+        conn = get_connection()
+        cur = conn.cursor()
+        oracle_table = get_oracle_table()
+        cur.execute(
+            f"SELECT DISTINCT UPPER(DBUSERNAME) FROM {oracle_table} "
+            "WHERE DBUSERNAME IS NOT NULL ORDER BY 1"
+        )
+        users = [str(row[0]) for row in cur.fetchall()]
+        cur.execute(
+            f"SELECT DISTINCT UPPER(OBJECT_NAME) FROM {oracle_table} "
+            "WHERE OBJECT_NAME IS NOT NULL ORDER BY 1"
+        )
+        objects = [str(row[0]) for row in cur.fetchall()]
+        return users, objects
+    except Exception as exc:
+        print(f"[INTENT_CATALOG_ERROR] {exc}")
+        return [], []
+    finally:
+        if cur is not None:
+            cur.close()
+        if conn is not None:
+            conn.close()

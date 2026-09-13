@@ -62,3 +62,7 @@ backend_runtime_settings.json
 
 # Artefacts temporaires de recuperation/comparaison
 .remote_repo_*
+
+# Runtime local genere
+.runtime/
+tools/llama.cpp/

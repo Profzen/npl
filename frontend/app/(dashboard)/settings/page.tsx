@@ -144,7 +144,7 @@ export default function SettingsPage() {
                       type={showPassword ? 'text' : 'password'}
                       value={formData.oracle_password}
                       onChange={(e) => handleInputChange('oracle_password', e.target.value)}
-                      placeholder="••••••••"
+                      placeholder="Laisser vide pour conserver"
                       className="pr-10"
                     />
                     <button

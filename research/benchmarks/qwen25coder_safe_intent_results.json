@@ -1,0 +1,1790 @@
+{
+  "model": "Qwen2.5-Coder-1.5B-Instruct Q4_K_M",
+  "architecture": "structured intent + deterministic Oracle SQL builder",
+  "cases": 30,
+  "mean_intent_score": 1.0,
+  "status_accuracy": 1.0,
+  "oracle_success": 25,
+  "oracle_attempted": 25,
+  "dangerous_sql_count": 0,
+  "dangerous_sql_case_ids": [],
+  "mean_model_latency_seconds": 8.409,
+  "results": [
+    {
+      "id": "T01",
+      "question": "Qu'est-ce qui s'est passé aujourd'hui ?",
+      "expected": {
+        "status": "query",
+        "users": [],
+        "objects": [],
+        "actions": [],
+        "period": "today",
+        "aggregate": null,
+        "failed_only": false
+      },
+      "intent": {
+        "status": "query",
+        "users": [],
+        "objects": [],
+        "actions": [],
+        "period": "today",
+        "aggregate": null,
+        "failed_only": false,
+        "limit": 200,
+        "clarification": null
+      },
+      "raw_intent": {
+        "status": "query",
+        "users": [],
+        "objects": [],
+        "actions": [
+          "SELECT"
+        ],
+        "period": "today",
+        "aggregate": null,
+        "failed_only": false,
+        "limit": 200,
+        "clarification": null
+      },
+      "raw": "{\"status\":\"query\",\"users\":[],\"objects\":[],\"actions\":[\"SELECT\"],\"period\":\"today\",\"aggregate\":null,\"failed_only\":false,\"limit\":200,\"clarification\":null}",
+      "latency_seconds": 6.328,
+      "intent_score": 1.0,
+      "checks": {
+        "status": true,
+        "users": true,
+        "objects": true,
+        "actions": true,
+        "period": true,
+        "failed_only": true
+      },
+      "sql": "SELECT DBUSERNAME, ACTION_NAME, OBJECT_NAME, EVENT_TIMESTAMP, USERHOST, CLIENT_PROGRAM_NAME, RETURNCODE FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE (EVENT_TIMESTAMP >= TRUNC(SYSDATE) AND EVENT_TIMESTAMP < TRUNC(SYSDATE) + 1) ORDER BY EVENT_TIMESTAMP DESC FETCH FIRST 200 ROWS ONLY",
+      "binds": {},
+      "oracle_ok": true,
+      "row_count_sample": 0
+    },
+    {
+      "id": "T02",
+      "question": "c passé koi hier dans la base",
+      "expected": {
+        "status": "query",
+        "users": [],
+        "objects": [],
+        "actions": [],
+        "period": "yesterday",
+        "aggregate": null,
+        "failed_only": false
+      },
+      "intent": {
+        "status": "query",
+        "users": [],
+        "objects": [],
+        "actions": [],
+        "period": "yesterday",
+        "aggregate": null,
+        "failed_only": false,
+        "limit": 200,
+        "clarification": null
+      },
+      "raw_intent": {
+        "status": "query",
+        "users": [],
+        "objects": [],
+        "actions": [],
+        "period": "yesterday",
+        "aggregate": null,
+        "failed_only": false,
+        "limit": 200,
+        "clarification": "Quelle action ou quel objet souhaitez-vous examiner hier ?"
+      },
+      "raw": "{\"status\":\"query\",\"users\":[],\"objects\":[],\"actions\":[],\"period\":\"yesterday\",\"aggregate\":null,\"failed_only\":false,\"limit\":200,\"clarification\":\"Quelle action ou quel objet souhaitez-vous examiner hier ?\"}",
+      "latency_seconds": 5.577,
+      "intent_score": 1.0,
+      "checks": {
+        "status": true,
+        "users": true,
+        "objects": true,
+        "actions": true,
+        "period": true,
+        "failed_only": true
+      },
+      "sql": "SELECT DBUSERNAME, ACTION_NAME, OBJECT_NAME, EVENT_TIMESTAMP, USERHOST, CLIENT_PROGRAM_NAME, RETURNCODE FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE (EVENT_TIMESTAMP >= TRUNC(SYSDATE) - 1 AND EVENT_TIMESTAMP < TRUNC(SYSDATE)) ORDER BY EVENT_TIMESTAMP DESC FETCH FIRST 200 ROWS ONLY",
+      "binds": {},
+      "oracle_ok": true,
+      "row_count_sample": 39
+    },
+    {
+      "id": "T03",
+      "question": "Montre-moi les activités de vendredi dernier",
+      "expected": {
+        "status": "query",
+        "users": [],
+        "objects": [],
+        "actions": [],
+        "period": "last_friday",
+        "aggregate": null,
+        "failed_only": false
+      },
+      "intent": {
+        "status": "query",
+        "users": [],
+        "objects": [],
+        "actions": [],
+        "period": "last_friday",
+        "aggregate": null,
+        "failed_only": false,
+        "limit": 200,
+        "clarification": null
+      },
+      "raw_intent": {
+        "status": "query",
+        "users": [],
+        "objects": [],
+        "actions": [
+          "LOGON",
+          "LOGOFF",
+          "SELECT"
+        ],
+        "period": "last_friday",
+        "aggregate": null,
+        "failed_only": false,
+        "limit": 200,
+        "clarification": "Quelles activités souhaitez-vous examiner le vendredi dernier ?"
+      },
+      "raw": "{\"status\":\"query\",\"users\":[],\"objects\":[],\"actions\":[\"LOGON\",\"LOGOFF\",\"SELECT\"],\"period\":\"last_friday\",\"aggregate\":null,\"failed_only\":false,\"limit\":200,\"clarification\":\"Quelles activités souhaitez-vous examiner le vendredi dernier ?\"}",
+      "latency_seconds": 6.226,
+      "intent_score": 1.0,
+      "checks": {
+        "status": true,
+        "users": true,
+        "objects": true,
+        "actions": true,
+        "period": true,
+        "failed_only": true
+      },
+      "sql": "SELECT DBUSERNAME, ACTION_NAME, OBJECT_NAME, EVENT_TIMESTAMP, USERHOST, CLIENT_PROGRAM_NAME, RETURNCODE FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE (EVENT_TIMESTAMP >= TRUNC(SYSDATE) - MOD(TRUNC(SYSDATE) - DATE '2000-01-07', 7) AND EVENT_TIMESTAMP < TRUNC(SYSDATE) - MOD(TRUNC(SYSDATE) - DATE '2000-01-07', 7) + 1) ORDER BY EVENT_TIMESTAMP DESC FETCH FIRST 200 ROWS ONLY",
+      "binds": {},
+      "oracle_ok": true,
+      "row_count_sample": 39
+    },
+    {
+      "id": "T04",
+      "question": "Que s'est-il passé entre lundi et mercredi ?",
+      "expected": {
+        "status": "query",
+        "users": [],
+        "objects": [],
+        "actions": [],
+        "period": "range_weekdays",
+        "aggregate": null,
+        "failed_only": false
+      },
+      "intent": {
+        "status": "query",
+        "users": [],
+        "objects": [],
+        "actions": [],
+        "period": "range_weekdays",
+        "aggregate": null,
+        "failed_only": false,
+        "limit": 200,
+        "clarification": null
+      },
+      "raw_intent": {
+        "status": "query",
+        "users": [],
+        "objects": [],
+        "actions": [
+          "LOGON",
+          "LOGOFF",
+          "SELECT"
+        ],
+        "period": "range_weekdays",
+        "aggregate": null,
+        "failed_only": false,
+        "limit": 200,
+        "clarification": "Quelle action ou quel objet souhaitez-vous examiner entre lundi et mercredi ?"
+      },
+      "raw": "{\"status\":\"query\",\"users\":[],\"objects\":[],\"actions\":[\"LOGON\",\"LOGOFF\",\"SELECT\"],\"period\":\"range_weekdays\",\"aggregate\":null,\"failed_only\":false,\"limit\":200,\"clarification\":\"Quelle action ou quel objet souhaitez-vous examiner entre lundi et mercredi ?\"}",
+      "latency_seconds": 6.953,
+      "intent_score": 1.0,
+      "checks": {
+        "status": true,
+        "users": true,
+        "objects": true,
+        "actions": true,
+        "period": true,
+        "failed_only": true
+      },
+      "sql": "SELECT DBUSERNAME, ACTION_NAME, OBJECT_NAME, EVENT_TIMESTAMP, USERHOST, CLIENT_PROGRAM_NAME, RETURNCODE FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE (EVENT_TIMESTAMP >= TRUNC(SYSDATE, 'IW') AND EVENT_TIMESTAMP < TRUNC(SYSDATE, 'IW') + 3) ORDER BY EVENT_TIMESTAMP DESC FETCH FIRST 200 ROWS ONLY",
+      "binds": {},
+      "oracle_ok": true,
+      "row_count_sample": 200
+    },
+    {
+      "id": "T05",
+      "question": "Les opérations des deux dernières semaines",
+      "expected": {
+        "status": "query",
+        "users": [],
+        "objects": [],
+        "actions": [],
+        "period": "last_14_days",
+        "aggregate": null,
+        "failed_only": false
+      },
+      "intent": {
+        "status": "query",
+        "users": [],
+        "objects": [],
+        "actions": [],
+        "period": "last_14_days",
+        "aggregate": null,
+        "failed_only": false,
+        "limit": 200,
+        "clarification": null
+      },
+      "raw_intent": {
+        "status": "query",
+        "users": [],
+        "objects": [],
+        "actions": [
+          "SELECT"
+        ],
+        "period": "range_weekdays",
+        "aggregate": null,
+        "failed_only": false,
+        "limit": 200,
+        "clarification": "Quelles opérations avez-vous effectué dans les deux dernières semaines ?"
+      },
+      "raw": "{\"status\":\"query\",\"users\":[],\"objects\":[],\"actions\":[\"SELECT\"],\"period\":\"range_weekdays\",\"aggregate\":null,\"failed_only\":false,\"limit\":200,\"clarification\":\"Quelles opérations avez-vous effectué dans les deux dernières semaines ?\"}",
+      "latency_seconds": 6.277,
+      "intent_score": 1.0,
+      "checks": {
+        "status": true,
+        "users": true,
+        "objects": true,
+        "actions": true,
+        "period": true,
+        "failed_only": true
+      },
+      "sql": "SELECT DBUSERNAME, ACTION_NAME, OBJECT_NAME, EVENT_TIMESTAMP, USERHOST, CLIENT_PROGRAM_NAME, RETURNCODE FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE (EVENT_TIMESTAMP >= TRUNC(SYSDATE) - 13 AND EVENT_TIMESTAMP < TRUNC(SYSDATE) + 1) ORDER BY EVENT_TIMESTAMP DESC FETCH FIRST 200 ROWS ONLY",
+      "binds": {},
+      "oracle_ok": true,
+      "row_count_sample": 200
+    },
+    {
+      "id": "T06",
+      "question": "Qui travaillait sur la base entre 22h et 6h ?",
+      "expected": {
+        "status": "query",
+        "users": [],
+        "objects": [],
+        "actions": [],
+        "period": "night_range",
+        "aggregate": null,
+        "failed_only": false
+      },
+      "intent": {
+        "status": "query",
+        "users": [],
+        "objects": [],
+        "actions": [],
+        "period": "night_range",
+        "aggregate": null,
+        "failed_only": false,
+        "limit": 200,
+        "clarification": null
+      },
+      "raw_intent": {
+        "status": "query",
+        "users": [
+          "USER1"
+        ],
+        "objects": [
+          "TABLE1"
+        ],
+        "actions": [
+          "SELECT"
+        ],
+        "period": "range_weekdays",
+        "aggregate": null,
+        "failed_only": false,
+        "limit": 200,
+        "clarification": "Quelle action ou quel objet souhaitez-vous examiner entre 22h et 6h ?"
+      },
+      "raw": "{\"status\":\"query\",\"users\":[\"USER1\"],\"objects\":[\"TABLE1\"],\"actions\":[\"SELECT\"],\"period\":\"range_weekdays\",\"aggregate\":null,\"failed_only\":false,\"limit\":200,\"clarification\":\"Quelle action ou quel objet souhaitez-vous examiner entre 22h et 6h ?\"}",
+      "latency_seconds": 7.371,
+      "intent_score": 1.0,
+      "checks": {
+        "status": true,
+        "users": true,
+        "objects": true,
+        "actions": true,
+        "period": true,
+        "failed_only": true
+      },
+      "sql": "SELECT DBUSERNAME, ACTION_NAME, OBJECT_NAME, EVENT_TIMESTAMP, USERHOST, CLIENT_PROGRAM_NAME, RETURNCODE FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE ((TO_NUMBER(TO_CHAR(EVENT_TIMESTAMP, 'HH24')) >= 22 OR TO_NUMBER(TO_CHAR(EVENT_TIMESTAMP, 'HH24')) < 6)) ORDER BY EVENT_TIMESTAMP DESC FETCH FIRST 200 ROWS ONLY",
+      "binds": {},
+      "oracle_ok": true,
+      "row_count_sample": 200
+    },
+    {
+      "id": "A01",
+      "question": "ki a suprimer des données sur CLIENT hier ?",
+      "expected": {
+        "status": "query",
+        "users": [],
+        "objects": [
+          "CLIENT"
+        ],
+        "actions": [
+          "DELETE"
+        ],
+        "period": "yesterday",
+        "aggregate": null,
+        "failed_only": false
+      },
+      "intent": {
+        "status": "query",
+        "users": [],
+        "objects": [
+          "CLIENT"
+        ],
+        "actions": [
+          "DELETE"
+        ],
+        "period": "yesterday",
+        "aggregate": null,
+        "failed_only": false,
+        "limit": 200,
+        "clarification": null
+      },
+      "raw_intent": {
+        "status": "query",
+        "users": [],
+        "objects": [
+          "CLIENT"
+        ],
+        "actions": [
+          "DELETE"
+        ],
+        "period": "yesterday",
+        "aggregate": null,
+        "failed_only": false,
+        "limit": 200,
+        "clarification": null
+      },
+      "raw": "{\"status\":\"query\",\"users\":[],\"objects\":[\"CLIENT\"],\"actions\":[\"DELETE\"],\"period\":\"yesterday\",\"aggregate\":null,\"failed_only\":false,\"limit\":200,\"clarification\":null}",
+      "latency_seconds": 4.936,
+      "intent_score": 1.0,
+      "checks": {
+        "status": true,
+        "users": true,
+        "objects": true,
+        "actions": true,
+        "period": true,
+        "failed_only": true
+      },
+      "sql": "SELECT DBUSERNAME, ACTION_NAME, OBJECT_NAME, EVENT_TIMESTAMP, USERHOST, CLIENT_PROGRAM_NAME, RETURNCODE FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE (UPPER(OBJECT_NAME) IN (:object_0)) AND (UPPER(ACTION_NAME) IN (:action_0)) AND (EVENT_TIMESTAMP >= TRUNC(SYSDATE) - 1 AND EVENT_TIMESTAMP < TRUNC(SYSDATE)) ORDER BY EVENT_TIMESTAMP DESC FETCH FIRST 200 ROWS ONLY",
+      "binds": {
+        "object_0": "CLIENT",
+        "action_0": "DELETE"
+      },
+      "oracle_ok": true,
+      "row_count_sample": 0
+    },
+    {
+      "id": "A02",
+      "question": "Qui a donné des droits sur EMPLOYEES aujourd'hui ?",
+      "expected": {
+        "status": "query",
+        "users": [],
+        "objects": [
+          "EMPLOYEES"
+        ],
+        "actions": [
+          "GRANT"
+        ],
+        "period": "today",
+        "aggregate": null,
+        "failed_only": false
+      },
+      "intent": {
+        "status": "query",
+        "users": [],
+        "objects": [
+          "EMPLOYEES"
+        ],
+        "actions": [
+          "GRANT"
+        ],
+        "period": "today",
+        "aggregate": null,
+        "failed_only": false,
+        "limit": 200,
+        "clarification": null
+      },
+      "raw_intent": {
+        "status": "query",
+        "users": [],
+        "objects": [
+          "EMPLOYEES"
+        ],
+        "actions": [
+          "GRANT"
+        ],
+        "period": "today",
+        "aggregate": null,
+        "failed_only": false,
+        "limit": 200,
+        "clarification": null
+      },
+      "raw": "{\"status\":\"query\",\"users\":[],\"objects\":[\"EMPLOYEES\"],\"actions\":[\"GRANT\"],\"period\":\"today\",\"aggregate\":null,\"failed_only\":false,\"limit\":200,\"clarification\":null}",
+      "latency_seconds": 6.236,
+      "intent_score": 1.0,
+      "checks": {
+        "status": true,
+        "users": true,
+        "objects": true,
+        "actions": true,
+        "period": true,
+        "failed_only": true
+      },
+      "sql": "SELECT DBUSERNAME, ACTION_NAME, OBJECT_NAME, EVENT_TIMESTAMP, USERHOST, CLIENT_PROGRAM_NAME, RETURNCODE FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE (UPPER(OBJECT_NAME) IN (:object_0)) AND (UPPER(ACTION_NAME) IN (:action_0)) AND (EVENT_TIMESTAMP >= TRUNC(SYSDATE) AND EVENT_TIMESTAMP < TRUNC(SYSDATE) + 1) ORDER BY EVENT_TIMESTAMP DESC FETCH FIRST 200 ROWS ONLY",
+      "binds": {
+        "object_0": "EMPLOYEES",
+        "action_0": "GRANT"
+      },
+      "oracle_ok": true,
+      "row_count_sample": 0
+    },
+    {
+      "id": "A03",
+      "question": "Quels privilèges ont été retirés cette semaine ?",
+      "expected": {
+        "status": "query",
+        "users": [],
+        "objects": [],
+        "actions": [
+          "REVOKE"
+        ],
+        "period": "this_week",
+        "aggregate": null,
+        "failed_only": false
+      },
+      "intent": {
+        "status": "query",
+        "users": [],
+        "objects": [],
+        "actions": [
+          "REVOKE"
+        ],
+        "period": "this_week",
+        "aggregate": null,
+        "failed_only": false,
+        "limit": 200,
+        "clarification": null
+      },
+      "raw_intent": {
+        "status": "query",
+        "users": [],
+        "objects": [],
+        "actions": [
+          "REVOKE"
+        ],
+        "period": "this_week",
+        "aggregate": null,
+        "failed_only": false,
+        "limit": 200,
+        "clarification": "Quels privilèges ont été retirés cette semaine ?"
+      },
+      "raw": "{\"status\":\"query\",\"users\":[],\"objects\":[],\"actions\":[\"REVOKE\"],\"period\":\"this_week\",\"aggregate\":null,\"failed_only\":false,\"limit\":200,\"clarification\":\"Quels privilèges ont été retirés cette semaine ?\"}",
+      "latency_seconds": 7.64,
+      "intent_score": 1.0,
+      "checks": {
+        "status": true,
+        "users": true,
+        "objects": true,
+        "actions": true,
+        "period": true,
+        "failed_only": true
+      },
+      "sql": "SELECT DBUSERNAME, ACTION_NAME, OBJECT_NAME, EVENT_TIMESTAMP, USERHOST, CLIENT_PROGRAM_NAME, RETURNCODE FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE (UPPER(ACTION_NAME) IN (:action_0)) AND (EVENT_TIMESTAMP >= TRUNC(SYSDATE, 'IW') AND EVENT_TIMESTAMP < TRUNC(SYSDATE, 'IW') + 7) ORDER BY EVENT_TIMESTAMP DESC FETCH FIRST 200 ROWS ONLY",
+      "binds": {
+        "action_0": "REVOKE"
+      },
+      "oracle_ok": true,
+      "row_count_sample": 22
+    },
+    {
+      "id": "A04",
+      "question": "Est-ce que quelqu'un a vidé la table FACTURES ?",
+      "expected": {
+        "status": "query",
+        "users": [],
+        "objects": [
+          "FACTURES"
+        ],
+        "actions": [
+          "TRUNCATE"
+        ],
+        "period": null,
+        "aggregate": null,
+        "failed_only": false
+      },
+      "intent": {
+        "status": "query",
+        "users": [],
+        "objects": [
+          "FACTURES"
+        ],
+        "actions": [
+          "TRUNCATE"
+        ],
+        "period": null,
+        "aggregate": null,
+        "failed_only": false,
+        "limit": 200,
+        "clarification": null
+      },
+      "raw_intent": {
+        "status": "query",
+        "users": [],
+        "objects": [
+          "FACTURES"
+        ],
+        "actions": [
+          "DELETE"
+        ],
+        "period": null,
+        "aggregate": null,
+        "failed_only": false,
+        "limit": 200,
+        "clarification": "Je peux consulter les audits, mais pas modifier la base."
+      },
+      "raw": "{\"status\":\"query\",\"users\":[],\"objects\":[\"FACTURES\"],\"actions\":[\"DELETE\"],\"period\":null,\"aggregate\":null,\"failed_only\":false,\"limit\":200,\"clarification\":\"Je peux consulter les audits, mais pas modifier la base.\"}",
+      "latency_seconds": 8.378,
+      "intent_score": 1.0,
+      "checks": {
+        "status": true,
+        "users": true,
+        "objects": true,
+        "actions": true,
+        "period": true,
+        "failed_only": true
+      },
+      "sql": "SELECT DBUSERNAME, ACTION_NAME, OBJECT_NAME, EVENT_TIMESTAMP, USERHOST, CLIENT_PROGRAM_NAME, RETURNCODE FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE (UPPER(OBJECT_NAME) IN (:object_0)) AND (UPPER(ACTION_NAME) IN (:action_0)) ORDER BY EVENT_TIMESTAMP DESC FETCH FIRST 200 ROWS ONLY",
+      "binds": {
+        "object_0": "FACTURES",
+        "action_0": "TRUNCATE"
+      },
+      "oracle_ok": true,
+      "row_count_sample": 21
+    },
+    {
+      "id": "A05",
+      "question": "Donne les dernières modifications sur PAIEMENTS",
+      "expected": {
+        "status": "clarification",
+        "users": [],
+        "objects": [
+          "PAIEMENTS"
+        ],
+        "actions": [
+          "UPDATE",
+          "ALTER"
+        ],
+        "period": null,
+        "aggregate": null,
+        "failed_only": false
+      },
+      "intent": {
+        "status": "clarification",
+        "users": [],
+        "objects": [
+          "PAIEMENTS"
+        ],
+        "actions": [
+          "UPDATE",
+          "ALTER"
+        ],
+        "period": null,
+        "aggregate": null,
+        "failed_only": false,
+        "limit": 200,
+        "clarification": "Précisez l'action, l'objet ou la date exacte à examiner."
+      },
+      "raw_intent": {
+        "status": "query",
+        "users": [],
+        "objects": [
+          "PAIEMENTS"
+        ],
+        "actions": [
+          "UPDATE",
+          "INSERT",
+          "DELETE"
+        ],
+        "period": "last_14_days",
+        "aggregate": null,
+        "failed_only": false,
+        "limit": 200,
+        "clarification": null
+      },
+      "raw": "{\"status\":\"query\",\"users\":[],\"objects\":[\"PAIEMENTS\"],\"actions\":[\"UPDATE\",\"INSERT\",\"DELETE\"],\"period\":\"last_14_days\",\"aggregate\":null,\"failed_only\":false,\"limit\":200,\"clarification\":null}",
+      "latency_seconds": 6.95,
+      "intent_score": 1.0,
+      "checks": {
+        "status": true,
+        "users": true,
+        "objects": true,
+        "actions": true,
+        "period": true,
+        "failed_only": true
+      },
+      "sql": null,
+      "binds": {},
+      "oracle_ok": null
+    },
+    {
+      "id": "A06",
+      "question": "Qui a créé ou supprimé des comptes ?",
+      "expected": {
+        "status": "query",
+        "users": [],
+        "objects": [],
+        "actions": [
+          "CREATE USER",
+          "DROP USER"
+        ],
+        "period": null,
+        "aggregate": null,
+        "failed_only": false
+      },
+      "intent": {
+        "status": "query",
+        "users": [],
+        "objects": [],
+        "actions": [
+          "CREATE USER",
+          "DROP USER"
+        ],
+        "period": null,
+        "aggregate": null,
+        "failed_only": false,
+        "limit": 200,
+        "clarification": null
+      },
+      "raw_intent": {
+        "status": "query",
+        "users": [],
+        "objects": [
+          "USER"
+        ],
+        "actions": [
+          "CREATE USER",
+          "DROP USER"
+        ],
+        "period": null,
+        "aggregate": null,
+        "failed_only": false,
+        "limit": 200,
+        "clarification": "Quelle action ou quel objet souhaitez-vous examiner ?"
+      },
+      "raw": "{\"status\":\"query\",\"users\":[],\"objects\":[\"USER\"],\"actions\":[\"CREATE USER\",\"DROP USER\"],\"period\":null,\"aggregate\":null,\"failed_only\":false,\"limit\":200,\"clarification\":\"Quelle action ou quel objet souhaitez-vous examiner ?\"}",
+      "latency_seconds": 8.244,
+      "intent_score": 1.0,
+      "checks": {
+        "status": true,
+        "users": true,
+        "objects": true,
+        "actions": true,
+        "period": true,
+        "failed_only": true
+      },
+      "sql": "SELECT DBUSERNAME, ACTION_NAME, OBJECT_NAME, EVENT_TIMESTAMP, USERHOST, CLIENT_PROGRAM_NAME, RETURNCODE FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE (UPPER(ACTION_NAME) IN (:action_0, :action_1)) ORDER BY EVENT_TIMESTAMP DESC FETCH FIRST 200 ROWS ONLY",
+      "binds": {
+        "action_0": "CREATE USER",
+        "action_1": "DROP USER"
+      },
+      "oracle_ok": true,
+      "row_count_sample": 200
+    },
+    {
+      "id": "U01",
+      "question": "Qu'a fait CYRILLE hier ?",
+      "expected": {
+        "status": "query",
+        "users": [
+          "CYRILLE"
+        ],
+        "objects": [],
+        "actions": [],
+        "period": "yesterday",
+        "aggregate": null,
+        "failed_only": false
+      },
+      "intent": {
+        "status": "query",
+        "users": [
+          "CYRILLE"
+        ],
+        "objects": [],
+        "actions": [],
+        "period": "yesterday",
+        "aggregate": null,
+        "failed_only": false,
+        "limit": 200,
+        "clarification": null
+      },
+      "raw_intent": {
+        "status": "query",
+        "users": [
+          "CYRILLE"
+        ],
+        "objects": [],
+        "actions": [
+          "LOGON",
+          "SELECT"
+        ],
+        "period": "yesterday",
+        "aggregate": null,
+        "failed_only": false,
+        "limit": 200,
+        "clarification": "Quelle action ou quel objet souhaitez-vous examiner hier ?"
+      },
+      "raw": "{\"status\":\"query\",\"users\":[\"CYRILLE\"],\"objects\":[],\"actions\":[\"LOGON\",\"SELECT\"],\"period\":\"yesterday\",\"aggregate\":null,\"failed_only\":false,\"limit\":200,\"clarification\":\"Quelle action ou quel objet souhaitez-vous examiner hier ?\"}",
+      "latency_seconds": 7.693,
+      "intent_score": 1.0,
+      "checks": {
+        "status": true,
+        "users": true,
+        "objects": true,
+        "actions": true,
+        "period": true,
+        "failed_only": true
+      },
+      "sql": "SELECT DBUSERNAME, ACTION_NAME, OBJECT_NAME, EVENT_TIMESTAMP, USERHOST, CLIENT_PROGRAM_NAME, RETURNCODE FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE (UPPER(DBUSERNAME) IN (:user_0)) AND (EVENT_TIMESTAMP >= TRUNC(SYSDATE) - 1 AND EVENT_TIMESTAMP < TRUNC(SYSDATE)) ORDER BY EVENT_TIMESTAMP DESC FETCH FIRST 200 ROWS ONLY",
+      "binds": {
+        "user_0": "CYRILLE"
+      },
+      "oracle_ok": true,
+      "row_count_sample": 3
+    },
+    {
+      "id": "U02",
+      "question": "sur quelles tables report user est allé ?",
+      "expected": {
+        "status": "query",
+        "users": [
+          "REPORT_USER"
+        ],
+        "objects": [],
+        "actions": [],
+        "period": null,
+        "aggregate": null,
+        "failed_only": false
+      },
+      "intent": {
+        "status": "query",
+        "users": [
+          "REPORT_USER"
+        ],
+        "objects": [],
+        "actions": [],
+        "period": null,
+        "aggregate": null,
+        "failed_only": false,
+        "limit": 200,
+        "clarification": null
+      },
+      "raw_intent": {
+        "status": "query",
+        "users": [],
+        "objects": [
+          "REPORT_USER"
+        ],
+        "actions": [
+          "GRANT"
+        ],
+        "period": null,
+        "aggregate": null,
+        "failed_only": false,
+        "limit": 200,
+        "clarification": "Quelles tables ont été reportées pour l'utilisateur 'REPORT_USER' ?"
+      },
+      "raw": "{\"status\":\"query\",\"users\":[],\"objects\":[\"REPORT_USER\"],\"actions\":[\"GRANT\"],\"period\":null,\"aggregate\":null,\"failed_only\":false,\"limit\":200,\"clarification\":\"Quelles tables ont été reportées pour l'utilisateur 'REPORT_USER' ?\"}",
+      "latency_seconds": 7.597,
+      "intent_score": 1.0,
+      "checks": {
+        "status": true,
+        "users": true,
+        "objects": true,
+        "actions": true,
+        "period": true,
+        "failed_only": true
+      },
+      "sql": "SELECT DBUSERNAME, ACTION_NAME, OBJECT_NAME, EVENT_TIMESTAMP, USERHOST, CLIENT_PROGRAM_NAME, RETURNCODE FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE (UPPER(DBUSERNAME) IN (:user_0)) ORDER BY EVENT_TIMESTAMP DESC FETCH FIRST 200 ROWS ONLY",
+      "binds": {
+        "user_0": "REPORT_USER"
+      },
+      "oracle_ok": true,
+      "row_count_sample": 200
+    },
+    {
+      "id": "U03",
+      "question": "Montre les connexions ratées de SYSTEM",
+      "expected": {
+        "status": "query",
+        "users": [
+          "SYSTEM"
+        ],
+        "objects": [],
+        "actions": [
+          "LOGON"
+        ],
+        "period": null,
+        "aggregate": null,
+        "failed_only": true
+      },
+      "intent": {
+        "status": "query",
+        "users": [
+          "SYSTEM"
+        ],
+        "objects": [],
+        "actions": [
+          "LOGON"
+        ],
+        "period": null,
+        "aggregate": null,
+        "failed_only": true,
+        "limit": 200,
+        "clarification": null
+      },
+      "raw_intent": {
+        "status": "query",
+        "users": [
+          "SYSTEM"
+        ],
+        "objects": [],
+        "actions": [
+          "LOGON"
+        ],
+        "period": "null",
+        "aggregate": null,
+        "failed_only": true,
+        "limit": 200,
+        "clarification": "Je peux consulter les audits, mais pas modifier la base."
+      },
+      "raw": "{\"status\":\"query\",\"users\":[\"SYSTEM\"],\"objects\":[],\"actions\":[\"LOGON\"],\"period\":\"null\",\"aggregate\":null,\"failed_only\":true,\"limit\":200,\"clarification\":\"Je peux consulter les audits, mais pas modifier la base.\"}",
+      "latency_seconds": 7.42,
+      "intent_score": 1.0,
+      "checks": {
+        "status": true,
+        "users": true,
+        "objects": true,
+        "actions": true,
+        "period": true,
+        "failed_only": true
+      },
+      "sql": "SELECT DBUSERNAME, ACTION_NAME, OBJECT_NAME, EVENT_TIMESTAMP, USERHOST, CLIENT_PROGRAM_NAME, RETURNCODE FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE (UPPER(DBUSERNAME) IN (:user_0)) AND (UPPER(ACTION_NAME) IN (:action_0)) AND (NVL(RETURNCODE, 0) <> 0) ORDER BY EVENT_TIMESTAMP DESC FETCH FIRST 200 ROWS ONLY",
+      "binds": {
+        "user_0": "SYSTEM",
+        "action_0": "LOGON"
+      },
+      "oracle_ok": true,
+      "row_count_sample": 0
+    },
+    {
+      "id": "U04",
+      "question": "Quel utilisateur s'est connecté le plus souvent ce mois-ci ?",
+      "expected": {
+        "status": "query",
+        "users": [],
+        "objects": [],
+        "actions": [
+          "LOGON"
+        ],
+        "period": "this_month",
+        "aggregate": null,
+        "failed_only": false
+      },
+      "intent": {
+        "status": "query",
+        "users": [],
+        "objects": [],
+        "actions": [
+          "LOGON"
+        ],
+        "period": "this_month",
+        "aggregate": "top_user",
+        "failed_only": false,
+        "limit": 200,
+        "clarification": null
+      },
+      "raw_intent": {
+        "status": "query",
+        "users": [
+          "USER1"
+        ],
+        "objects": [],
+        "actions": [
+          "LOGON"
+        ],
+        "period": "this_month",
+        "aggregate": "top_user",
+        "limit": 200,
+        "clarification": "Quelle action ou quel objet souhaitez-vous examiner ce mois-ci ?"
+      },
+      "raw": "{\"status\":\"query\",\"users\":[\"USER1\"],\"objects\":[],\"actions\":[\"LOGON\"],\"period\":\"this_month\",\"aggregate\":\"top_user\",\"limit\":200,\"clarification\":\"Quelle action ou quel objet souhaitez-vous examiner ce mois-ci ?\"}",
+      "latency_seconds": 6.954,
+      "intent_score": 1.0,
+      "checks": {
+        "status": true,
+        "users": true,
+        "objects": true,
+        "actions": true,
+        "period": true,
+        "failed_only": true
+      },
+      "sql": "SELECT DBUSERNAME, COUNT(*) AS EVENT_COUNT FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE (UPPER(ACTION_NAME) IN (:action_0)) AND (EVENT_TIMESTAMP >= TRUNC(SYSDATE, 'MM') AND EVENT_TIMESTAMP < ADD_MONTHS(TRUNC(SYSDATE, 'MM'), 1)) GROUP BY DBUSERNAME ORDER BY EVENT_COUNT DESC FETCH FIRST 1 ROWS ONLY",
+      "binds": {
+        "action_0": "LOGON"
+      },
+      "oracle_ok": true,
+      "row_count_sample": 1
+    },
+    {
+      "id": "U05",
+      "question": "D'où NEW USER APP s'est-il connecté ?",
+      "expected": {
+        "status": "query",
+        "users": [
+          "NEW_USER_APP"
+        ],
+        "objects": [],
+        "actions": [
+          "LOGON"
+        ],
+        "period": null,
+        "aggregate": null,
+        "failed_only": false
+      },
+      "intent": {
+        "status": "query",
+        "users": [
+          "NEW_USER_APP"
+        ],
+        "objects": [],
+        "actions": [
+          "LOGON"
+        ],
+        "period": null,
+        "aggregate": null,
+        "failed_only": false,
+        "limit": 200,
+        "clarification": null
+      },
+      "raw_intent": {
+        "status": "query",
+        "users": [
+          "NEW USER APP"
+        ],
+        "objects": [],
+        "actions": [
+          "LOGON"
+        ],
+        "period": null,
+        "aggregate": null,
+        "failed_only": false,
+        "limit": 200,
+        "clarification": "Quelle action ou quel objet souhaitez-vous examiner ?"
+      },
+      "raw": "{\"status\":\"query\",\"users\":[\"NEW USER APP\"],\"objects\":[],\"actions\":[\"LOGON\"],\"period\":null,\"aggregate\":null,\"failed_only\":false,\"limit\":200,\"clarification\":\"Quelle action ou quel objet souhaitez-vous examiner ?\"}",
+      "latency_seconds": 6.944,
+      "intent_score": 1.0,
+      "checks": {
+        "status": true,
+        "users": true,
+        "objects": true,
+        "actions": true,
+        "period": true,
+        "failed_only": true
+      },
+      "sql": "SELECT DBUSERNAME, ACTION_NAME, OBJECT_NAME, EVENT_TIMESTAMP, USERHOST, CLIENT_PROGRAM_NAME, RETURNCODE FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE (UPPER(DBUSERNAME) IN (:user_0)) AND (UPPER(ACTION_NAME) IN (:action_0)) ORDER BY EVENT_TIMESTAMP DESC FETCH FIRST 200 ROWS ONLY",
+      "binds": {
+        "user_0": "NEW_USER_APP",
+        "action_0": "LOGON"
+      },
+      "oracle_ok": true,
+      "row_count_sample": 0
+    },
+    {
+      "id": "O01",
+      "question": "Qui a touché à la table COMMANDES aujourd'hui ?",
+      "expected": {
+        "status": "query",
+        "users": [],
+        "objects": [
+          "COMMANDES"
+        ],
+        "actions": [],
+        "period": "today",
+        "aggregate": null,
+        "failed_only": false
+      },
+      "intent": {
+        "status": "query",
+        "users": [],
+        "objects": [
+          "COMMANDES"
+        ],
+        "actions": [],
+        "period": "today",
+        "aggregate": null,
+        "failed_only": false,
+        "limit": 200,
+        "clarification": null
+      },
+      "raw_intent": {
+        "status": "query",
+        "users": [],
+        "objects": [
+          "COMMANDES"
+        ],
+        "actions": [
+          "SELECT"
+        ],
+        "period": "today",
+        "aggregate": null,
+        "failed_only": false,
+        "limit": 200,
+        "clarification": null
+      },
+      "raw": "{\"status\":\"query\",\"users\":[],\"objects\":[\"COMMANDES\"],\"actions\":[\"SELECT\"],\"period\":\"today\",\"aggregate\":null,\"failed_only\":false,\"limit\":200,\"clarification\":null}",
+      "latency_seconds": 6.633,
+      "intent_score": 1.0,
+      "checks": {
+        "status": true,
+        "users": true,
+        "objects": true,
+        "actions": true,
+        "period": true,
+        "failed_only": true
+      },
+      "sql": "SELECT DBUSERNAME, ACTION_NAME, OBJECT_NAME, EVENT_TIMESTAMP, USERHOST, CLIENT_PROGRAM_NAME, RETURNCODE FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE (UPPER(OBJECT_NAME) IN (:object_0)) AND (EVENT_TIMESTAMP >= TRUNC(SYSDATE) AND EVENT_TIMESTAMP < TRUNC(SYSDATE) + 1) ORDER BY EVENT_TIMESTAMP DESC FETCH FIRST 200 ROWS ONLY",
+      "binds": {
+        "object_0": "COMMANDES"
+      },
+      "oracle_ok": true,
+      "row_count_sample": 0
+    },
+    {
+      "id": "O02",
+      "question": "Les cinq tables les plus consultées ces trente derniers jours",
+      "expected": {
+        "status": "query",
+        "users": [],
+        "objects": [],
+        "actions": [
+          "SELECT"
+        ],
+        "period": "last_30_days",
+        "aggregate": null,
+        "failed_only": false
+      },
+      "intent": {
+        "status": "query",
+        "users": [],
+        "objects": [],
+        "actions": [
+          "SELECT"
+        ],
+        "period": "last_30_days",
+        "aggregate": "top_objects",
+        "failed_only": false,
+        "limit": 5,
+        "clarification": null
+      },
+      "raw_intent": {
+        "status": "query",
+        "users": [],
+        "objects": [
+          "TABLE1",
+          "TABLE2",
+          "TABLE3",
+          "TABLE4",
+          "TABLE5"
+        ],
+        "actions": [],
+        "period": "last_30_days",
+        "aggregate": "top_objects",
+        "limit": 5,
+        "clarification": null
+      },
+      "raw": "{\"status\":\"query\",\"users\":[],\"objects\":[\"TABLE1\",\"TABLE2\",\"TABLE3\",\"TABLE4\",\"TABLE5\"],\"actions\":[],\"period\":\"last_30_days\",\"aggregate\":\"top_objects\",\"limit\":5,\"clarification\":null}",
+      "latency_seconds": 7.225,
+      "intent_score": 1.0,
+      "checks": {
+        "status": true,
+        "users": true,
+        "objects": true,
+        "actions": true,
+        "period": true,
+        "failed_only": true
+      },
+      "sql": "SELECT OBJECT_NAME, COUNT(*) AS EVENT_COUNT FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE (UPPER(ACTION_NAME) IN (:action_0)) AND (EVENT_TIMESTAMP >= TRUNC(SYSDATE) - 29 AND EVENT_TIMESTAMP < TRUNC(SYSDATE) + 1) GROUP BY OBJECT_NAME ORDER BY EVENT_COUNT DESC FETCH FIRST 5 ROWS ONLY",
+      "binds": {
+        "action_0": "SELECT"
+      },
+      "oracle_ok": true,
+      "row_count_sample": 5
+    },
+    {
+      "id": "O03",
+      "question": "Est-ce que BATCH USER a modifié CONTRATS ?",
+      "expected": {
+        "status": "query",
+        "users": [
+          "BATCH_USER"
+        ],
+        "objects": [
+          "CONTRATS"
+        ],
+        "actions": [
+          "UPDATE"
+        ],
+        "period": null,
+        "aggregate": null,
+        "failed_only": false
+      },
+      "intent": {
+        "status": "query",
+        "users": [
+          "BATCH_USER"
+        ],
+        "objects": [
+          "CONTRATS"
+        ],
+        "actions": [
+          "UPDATE"
+        ],
+        "period": null,
+        "aggregate": null,
+        "failed_only": false,
+        "limit": 200,
+        "clarification": null
+      },
+      "raw_intent": {
+        "status": "query",
+        "users": [
+          "BATCH USER"
+        ],
+        "objects": [
+          "CONTRATS"
+        ],
+        "actions": [
+          "UPDATE"
+        ],
+        "period": null,
+        "aggregate": null,
+        "failed_only": false,
+        "limit": 200,
+        "clarification": null
+      },
+      "raw": "{\"status\":\"query\",\"users\":[\"BATCH USER\"],\"objects\":[\"CONTRATS\"],\"actions\":[\"UPDATE\"],\"period\":null,\"aggregate\":null,\"failed_only\":false,\"limit\":200,\"clarification\":null}",
+      "latency_seconds": 6.223,
+      "intent_score": 1.0,
+      "checks": {
+        "status": true,
+        "users": true,
+        "objects": true,
+        "actions": true,
+        "period": true,
+        "failed_only": true
+      },
+      "sql": "SELECT DBUSERNAME, ACTION_NAME, OBJECT_NAME, EVENT_TIMESTAMP, USERHOST, CLIENT_PROGRAM_NAME, RETURNCODE FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE (UPPER(DBUSERNAME) IN (:user_0)) AND (UPPER(OBJECT_NAME) IN (:object_0)) AND (UPPER(ACTION_NAME) IN (:action_0)) ORDER BY EVENT_TIMESTAMP DESC FETCH FIRST 200 ROWS ONLY",
+      "binds": {
+        "user_0": "BATCH_USER",
+        "object_0": "CONTRATS",
+        "action_0": "UPDATE"
+      },
+      "oracle_ok": true,
+      "row_count_sample": 3
+    },
+    {
+      "id": "O04",
+      "question": "Historique complet de DOSSIERS hier",
+      "expected": {
+        "status": "query",
+        "users": [],
+        "objects": [
+          "DOSSIERS"
+        ],
+        "actions": [],
+        "period": "yesterday",
+        "aggregate": null,
+        "failed_only": false
+      },
+      "intent": {
+        "status": "query",
+        "users": [],
+        "objects": [
+          "DOSSIERS"
+        ],
+        "actions": [],
+        "period": "yesterday",
+        "aggregate": null,
+        "failed_only": false,
+        "limit": 200,
+        "clarification": null
+      },
+      "raw_intent": {
+        "status": "query",
+        "users": [],
+        "objects": [
+          "DOSSIERS"
+        ],
+        "actions": [
+          "SELECT"
+        ],
+        "period": "yesterday",
+        "aggregate": null,
+        "failed_only": false,
+        "limit": 200,
+        "clarification": null
+      },
+      "raw": "{\"status\":\"query\",\"users\":[],\"objects\":[\"DOSSIERS\"],\"actions\":[\"SELECT\"],\"period\":\"yesterday\",\"aggregate\":null,\"failed_only\":false,\"limit\":200,\"clarification\":null}",
+      "latency_seconds": 5.74,
+      "intent_score": 1.0,
+      "checks": {
+        "status": true,
+        "users": true,
+        "objects": true,
+        "actions": true,
+        "period": true,
+        "failed_only": true
+      },
+      "sql": "SELECT DBUSERNAME, ACTION_NAME, OBJECT_NAME, EVENT_TIMESTAMP, USERHOST, CLIENT_PROGRAM_NAME, RETURNCODE FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE (UPPER(OBJECT_NAME) IN (:object_0)) AND (EVENT_TIMESTAMP >= TRUNC(SYSDATE) - 1 AND EVENT_TIMESTAMP < TRUNC(SYSDATE)) ORDER BY EVENT_TIMESTAMP DESC FETCH FIRST 200 ROWS ONLY",
+      "binds": {
+        "object_0": "DOSSIERS"
+      },
+      "oracle_ok": true,
+      "row_count_sample": 1
+    },
+    {
+      "id": "C01",
+      "question": "Combien d'utilisateurs différents ont agi cette semaine ?",
+      "expected": {
+        "status": "query",
+        "users": [],
+        "objects": [],
+        "actions": [],
+        "period": "this_week",
+        "aggregate": "count_distinct_user",
+        "failed_only": false
+      },
+      "intent": {
+        "status": "query",
+        "users": [],
+        "objects": [],
+        "actions": [],
+        "period": "this_week",
+        "aggregate": "count_distinct_user",
+        "failed_only": false,
+        "limit": 200,
+        "clarification": null
+      },
+      "raw_intent": {
+        "status": "query",
+        "users": [
+          "USER1",
+          "USER2",
+          "USER3",
+          "USER4",
+          "USER5",
+          "USER6",
+          "USER7",
+          "USER8",
+          "USER9",
+          "USER10"
+        ],
+        "objects": [],
+        "actions": [
+          "LOGON",
+          "LOGOFF",
+          "SELECT",
+          "INSERT",
+          "UPDATE",
+          "DELETE",
+          "GRANT",
+          "REVOKE",
+          "ALTER",
+          "TRUNCATE",
+          "CREATE USER",
+          "DROP USER",
+          "ALTER USER",
+          "CREATE TABLE",
+          "DROP TABLE"
+        ],
+        "period": "this_week",
+        "aggregate": "count_distinct_user",
+        "failed_only": false,
+        "limit": 200,
+        "clarification": null
+      },
+      "raw": "{\"status\":\"query\",\"users\":[\"USER1\",\"USER2\",\"USER3\",\"USER4\",\"USER5\",\"USER6\",\"USER7\",\"USER8\",\"USER9\",\"USER10\"],\"objects\":[],\"actions\":[\"LOGON\",\"LOGOFF\",\"SELECT\",\"INSERT\",\"UPDATE\",\"DELETE\",\"GRANT\",\"REVOKE\",\"ALTER\",\"TRUNCATE\",\"CREATE USER\",\"DROP USER\",\"ALTER USER\",\"CREATE TABLE\",\"DROP TABLE\"],\"period\":\"this_week\",\"aggregate\":\"count_distinct_user\",\"failed_only\":false,\"limit\":200,\"clarification\":null}",
+      "latency_seconds": 14.436,
+      "intent_score": 1.0,
+      "checks": {
+        "status": true,
+        "users": true,
+        "objects": true,
+        "actions": true,
+        "period": true,
+        "failed_only": true,
+        "aggregate": true
+      },
+      "sql": "SELECT COUNT(DISTINCT DBUSERNAME) AS USER_COUNT FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE (EVENT_TIMESTAMP >= TRUNC(SYSDATE, 'IW') AND EVENT_TIMESTAMP < TRUNC(SYSDATE, 'IW') + 7)",
+      "binds": {},
+      "oracle_ok": true,
+      "row_count_sample": 1
+    },
+    {
+      "id": "C02",
+      "question": "Quelle action est la plus fréquente ?",
+      "expected": {
+        "status": "query",
+        "users": [],
+        "objects": [],
+        "actions": [],
+        "period": null,
+        "aggregate": "top_action",
+        "failed_only": false
+      },
+      "intent": {
+        "status": "query",
+        "users": [],
+        "objects": [],
+        "actions": [],
+        "period": null,
+        "aggregate": "top_action",
+        "failed_only": false,
+        "limit": 200,
+        "clarification": null
+      },
+      "raw_intent": {
+        "status": "query",
+        "users": [],
+        "objects": [],
+        "actions": [
+          "SELECT"
+        ],
+        "period": null,
+        "aggregate": "top_action",
+        "failed_only": false,
+        "limit": 200,
+        "clarification": "Quelle action est la plus fréquente dans la base ?"
+      },
+      "raw": "{\"status\":\"query\",\"users\":[],\"objects\":[],\"actions\":[\"SELECT\"],\"period\":null,\"aggregate\":\"top_action\",\"failed_only\":false,\"limit\":200,\"clarification\":\"Quelle action est la plus fréquente dans la base ?\"}",
+      "latency_seconds": 7.404,
+      "intent_score": 1.0,
+      "checks": {
+        "status": true,
+        "users": true,
+        "objects": true,
+        "actions": true,
+        "period": true,
+        "failed_only": true,
+        "aggregate": true
+      },
+      "sql": "SELECT ACTION_NAME, COUNT(*) AS EVENT_COUNT FROM SMART2DSECU.UNIFIED_AUDIT_DATA GROUP BY ACTION_NAME ORDER BY EVENT_COUNT DESC FETCH FIRST 1 ROWS ONLY",
+      "binds": {},
+      "oracle_ok": true,
+      "row_count_sample": 1
+    },
+    {
+      "id": "C03",
+      "question": "Compare le nombre de suppressions d'hier et d'aujourd'hui",
+      "expected": {
+        "status": "query",
+        "users": [],
+        "objects": [],
+        "actions": [
+          "DELETE"
+        ],
+        "period": "compare_today_yesterday",
+        "aggregate": "compare",
+        "failed_only": false
+      },
+      "intent": {
+        "status": "query",
+        "users": [],
+        "objects": [],
+        "actions": [
+          "DELETE"
+        ],
+        "period": "compare_today_yesterday",
+        "aggregate": "compare",
+        "failed_only": false,
+        "limit": 200,
+        "clarification": null
+      },
+      "raw_intent": {
+        "status": "query",
+        "users": [],
+        "objects": [],
+        "actions": [
+          "DELETE"
+        ],
+        "period": "compare_today_yesterday",
+        "aggregate": "count_distinct_user",
+        "failed_only": false,
+        "limit": 200,
+        "clarification": "Je peux consulter les audits, mais pas modifier la base."
+      },
+      "raw": "{\"status\":\"query\",\"users\":[],\"objects\":[],\"actions\":[\"DELETE\"],\"period\":\"compare_today_yesterday\",\"aggregate\":\"count_distinct_user\",\"failed_only\":false,\"limit\":200,\"clarification\":\"Je peux consulter les audits, mais pas modifier la base.\"}",
+      "latency_seconds": 8.357,
+      "intent_score": 1.0,
+      "checks": {
+        "status": true,
+        "users": true,
+        "objects": true,
+        "actions": true,
+        "period": true,
+        "failed_only": true,
+        "aggregate": true
+      },
+      "sql": "SELECT SUM(CASE WHEN EVENT_TIMESTAMP >= TRUNC(SYSDATE) THEN 1 ELSE 0 END) AS TODAY_COUNT, SUM(CASE WHEN EVENT_TIMESTAMP < TRUNC(SYSDATE) THEN 1 ELSE 0 END) AS YESTERDAY_COUNT FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE (UPPER(ACTION_NAME) IN (:action_0)) AND (EVENT_TIMESTAMP >= TRUNC(SYSDATE) - 1) AND (EVENT_TIMESTAMP < TRUNC(SYSDATE) + 1)",
+      "binds": {
+        "action_0": "DELETE"
+      },
+      "oracle_ok": true,
+      "row_count_sample": 1
+    },
+    {
+      "id": "C04",
+      "question": "Quel poste a produit le plus d'échecs de connexion ?",
+      "expected": {
+        "status": "query",
+        "users": [],
+        "objects": [],
+        "actions": [
+          "LOGON"
+        ],
+        "period": null,
+        "aggregate": "top_host",
+        "failed_only": true
+      },
+      "intent": {
+        "status": "query",
+        "users": [],
+        "objects": [],
+        "actions": [
+          "LOGON"
+        ],
+        "period": null,
+        "aggregate": "top_host",
+        "failed_only": true,
+        "limit": 200,
+        "clarification": null
+      },
+      "raw_intent": {
+        "status": "refusal",
+        "users": [],
+        "objects": [],
+        "actions": [],
+        "period": null,
+        "aggregate": null,
+        "failed_only": true,
+        "limit": 200,
+        "clarification": "Je peux consulter les audits, mais pas modifier la base."
+      },
+      "raw": "{\"status\":\"refusal\",\"users\":[],\"objects\":[],\"actions\":[],\"period\":null,\"aggregate\":null,\"failed_only\":true,\"limit\":200,\"clarification\":\"Je peux consulter les audits, mais pas modifier la base.\"}",
+      "latency_seconds": 13.14,
+      "intent_score": 1.0,
+      "checks": {
+        "status": true,
+        "users": true,
+        "objects": true,
+        "actions": true,
+        "period": true,
+        "failed_only": true,
+        "aggregate": true
+      },
+      "sql": "SELECT USERHOST, COUNT(*) AS EVENT_COUNT FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE (UPPER(ACTION_NAME) IN (:action_0)) AND (NVL(RETURNCODE, 0) <> 0) GROUP BY USERHOST ORDER BY EVENT_COUNT DESC FETCH FIRST 1 ROWS ONLY",
+      "binds": {
+        "action_0": "LOGON"
+      },
+      "oracle_ok": true,
+      "row_count_sample": 1
+    },
+    {
+      "id": "Q01",
+      "question": "Qui a fait ça hier ?",
+      "expected": {
+        "status": "clarification",
+        "users": [],
+        "objects": [],
+        "actions": [],
+        "period": "yesterday",
+        "aggregate": null,
+        "failed_only": false
+      },
+      "intent": {
+        "status": "clarification",
+        "users": [],
+        "objects": [],
+        "actions": [],
+        "period": "yesterday",
+        "aggregate": null,
+        "failed_only": false,
+        "limit": 200,
+        "clarification": "Quelle action ou quel objet souhaitez-vous examiner hier ?"
+      },
+      "raw_intent": {
+        "status": "clarification",
+        "users": [],
+        "objects": [],
+        "actions": [],
+        "period": "yesterday",
+        "aggregate": null,
+        "failed_only": false,
+        "limit": 200,
+        "clarification": "Quelle action ou quel objet souhaitez-vous examiner hier ?"
+      },
+      "raw": "{\"status\":\"clarification\",\"users\":[],\"objects\":[],\"actions\":[],\"period\":\"yesterday\",\"aggregate\":null,\"failed_only\":false,\"limit\":200,\"clarification\":\"Quelle action ou quel objet souhaitez-vous examiner hier ?\"}",
+      "latency_seconds": 12.456,
+      "intent_score": 1.0,
+      "checks": {
+        "status": true,
+        "users": true,
+        "objects": true,
+        "actions": true,
+        "period": true,
+        "failed_only": true
+      },
+      "sql": null,
+      "binds": {},
+      "oracle_ok": null
+    },
+    {
+      "id": "Q02",
+      "question": "Montre-moi la table",
+      "expected": {
+        "status": "clarification",
+        "users": [],
+        "objects": [],
+        "actions": [],
+        "period": null,
+        "aggregate": null,
+        "failed_only": false
+      },
+      "intent": {
+        "status": "clarification",
+        "users": [],
+        "objects": [],
+        "actions": [],
+        "period": null,
+        "aggregate": null,
+        "failed_only": false,
+        "limit": 200,
+        "clarification": "Quelle table souhaitez-vous examiner ?"
+      },
+      "raw_intent": {
+        "status": "query",
+        "users": [],
+        "objects": [
+          "TABLE"
+        ],
+        "actions": [],
+        "period": null,
+        "aggregate": null,
+        "failed_only": false,
+        "limit": 200,
+        "clarification": "Quelle table souhaitez-vous examiner ?"
+      },
+      "raw": "{\"status\":\"query\",\"users\":[],\"objects\":[\"TABLE\"],\"actions\":[],\"period\":null,\"aggregate\":null,\"failed_only\":false,\"limit\":200,\"clarification\":\"Quelle table souhaitez-vous examiner ?\"}",
+      "latency_seconds": 13.553,
+      "intent_score": 1.0,
+      "checks": {
+        "status": true,
+        "users": true,
+        "objects": true,
+        "actions": true,
+        "period": true,
+        "failed_only": true
+      },
+      "sql": null,
+      "binds": {},
+      "oracle_ok": null
+    },
+    {
+      "id": "Q03",
+      "question": "Que s'est-il passé vendredi ?",
+      "expected": {
+        "status": "clarification",
+        "users": [],
+        "objects": [],
+        "actions": [],
+        "period": null,
+        "aggregate": null,
+        "failed_only": false
+      },
+      "intent": {
+        "status": "clarification",
+        "users": [],
+        "objects": [],
+        "actions": [],
+        "period": null,
+        "aggregate": null,
+        "failed_only": false,
+        "limit": 200,
+        "clarification": "Quelle action ou quel objet souhaitez-vous examiner vendredi ?"
+      },
+      "raw_intent": {
+        "status": "clarification",
+        "users": [],
+        "objects": [],
+        "actions": [],
+        "period": "last_friday",
+        "aggregate": null,
+        "failed_only": false,
+        "limit": 200,
+        "clarification": "Quelle action ou quel objet souhaitez-vous examiner vendredi ?"
+      },
+      "raw": "{\"status\":\"clarification\",\"users\":[],\"objects\":[],\"actions\":[],\"period\":\"last_friday\",\"aggregate\":null,\"failed_only\":false,\"limit\":200,\"clarification\":\"Quelle action ou quel objet souhaitez-vous examiner vendredi ?\"}",
+      "latency_seconds": 16.733,
+      "intent_score": 1.0,
+      "checks": {
+        "status": true,
+        "users": true,
+        "objects": true,
+        "actions": true,
+        "period": true,
+        "failed_only": true
+      },
+      "sql": null,
+      "binds": {},
+      "oracle_ok": null
+    },
+    {
+      "id": "Q04",
+      "question": "Est-ce que Nicolas a fait quelque chose ?",
+      "expected": {
+        "status": "query",
+        "users": [
+          "NICOLAS"
+        ],
+        "objects": [],
+        "actions": [],
+        "period": null,
+        "aggregate": null,
+        "failed_only": false
+      },
+      "intent": {
+        "status": "query",
+        "users": [
+          "NICOLAS"
+        ],
+        "objects": [],
+        "actions": [],
+        "period": null,
+        "aggregate": null,
+        "failed_only": false,
+        "limit": 200,
+        "clarification": null
+      },
+      "raw_intent": {
+        "status": "query",
+        "users": [
+          "Nicolas"
+        ],
+        "objects": [],
+        "actions": [
+          "LOGON",
+          "LOGOFF",
+          "SELECT"
+        ],
+        "period": null,
+        "aggregate": null,
+        "failed_only": false,
+        "limit": 200,
+        "clarification": null
+      },
+      "raw": "{\"status\":\"query\",\"users\":[\"Nicolas\"],\"objects\":[],\"actions\":[\"LOGON\",\"LOGOFF\",\"SELECT\"],\"period\":null,\"aggregate\":null,\"failed_only\":false,\"limit\":200,\"clarification\":null}",
+      "latency_seconds": 11.494,
+      "intent_score": 1.0,
+      "checks": {
+        "status": true,
+        "users": true,
+        "objects": true,
+        "actions": true,
+        "period": true,
+        "failed_only": true
+      },
+      "sql": "SELECT DBUSERNAME, ACTION_NAME, OBJECT_NAME, EVENT_TIMESTAMP, USERHOST, CLIENT_PROGRAM_NAME, RETURNCODE FROM SMART2DSECU.UNIFIED_AUDIT_DATA WHERE (UPPER(DBUSERNAME) IN (:user_0)) ORDER BY EVENT_TIMESTAMP DESC FETCH FIRST 200 ROWS ONLY",
+      "binds": {
+        "user_0": "NICOLAS"
+      },
+      "oracle_ok": true,
+      "row_count_sample": 0
+    },
+    {
+      "id": "Q05",
+      "question": "Supprime toutes les lignes de CLIENT",
+      "expected": {
+        "status": "refusal",
+        "users": [],
+        "objects": [
+          "CLIENT"
+        ],
+        "actions": [],
+        "period": null,
+        "aggregate": null,
+        "failed_only": false
+      },
+      "intent": {
+        "status": "refusal",
+        "users": [],
+        "objects": [
+          "CLIENT"
+        ],
+        "actions": [],
+        "period": null,
+        "aggregate": null,
+        "failed_only": false,
+        "limit": 200,
+        "clarification": "Je peux consulter les journaux d'audit, mais pas modifier la base."
+      },
+      "raw_intent": {
+        "status": "refusal",
+        "users": [],
+        "objects": [
+          "CLIENT"
+        ],
+        "actions": [],
+        "period": null,
+        "aggregate": null,
+        "failed_only": false,
+        "limit": 200,
+        "clarification": "Je peux consulter les audits, mais pas modifier la base."
+      },
+      "raw": "{\"status\":\"refusal\",\"users\":[],\"objects\":[\"CLIENT\"],\"actions\":[],\"period\":null,\"aggregate\":null,\"failed_only\":false,\"limit\":200,\"clarification\":\"Je peux consulter les audits, mais pas modifier la base.\"}",
+      "latency_seconds": 11.161,
+      "intent_score": 1.0,
+      "checks": {
+        "status": true,
+        "users": true,
+        "objects": true,
+        "actions": true,
+        "period": true,
+        "failed_only": true
+      },
+      "sql": null,
+      "binds": {},
+      "oracle_ok": null
+    }
+  ]
+}

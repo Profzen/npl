@@ -142,10 +142,7 @@ export async function submitQuery(request: QueryRequest): Promise<QueryResponse>
     body: JSON.stringify(request),
   })
 
-  return {
-    ...payload,
-    blocked: false,
-  }
+  return payload
 }
 
 export async function submitTrackedQuery(
@@ -165,10 +162,7 @@ export async function submitTrackedQuery(
       if (!progress.result) {
         throw new ApiError(500, 'La requete est terminee mais aucun resultat n a ete renvoye.')
       }
-      return {
-        ...progress.result,
-        blocked: false,
-      }
+      return progress.result
     }
 
     if (progress.status === 'error') {
@@ -193,7 +187,7 @@ export async function getHistory(): Promise<HistoryEntry[]> {
       synthesis: entry.synthesis,
       rows: [],
       row_count: Number(entry.row_count || 0),
-      blocked: false,
+      blocked: Boolean(entry.blocked),
       error: entry.error ?? null,
       created_at: createdAt,
       status: entry.error ? 'error' : 'ok',

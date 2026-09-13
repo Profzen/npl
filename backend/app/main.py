@@ -37,10 +37,25 @@ from app.services.auth_service import (
     revoke_session,
     set_user_active,
 )
-from app.services.nlp_service import generate_sql_from_question, model_status
-from app.services.oracle_service import execute_sql, fetch_metadata, get_connection, oracle_status
-from app.services.settings_service import get_fetch_limit, get_runtime_settings, update_runtime_settings
-from app.services.synthesis_service import build_synthesis, phi3_status
+from app.services.local_model_service import (
+    build_local_synthesis,
+    interpret_question,
+    local_model_status,
+)
+from app.services.safe_sql_builder import UnsafeIntentError, build_safe_audit_query
+from app.services.oracle_service import (
+    execute_sql,
+    fetch_intent_catalog,
+    fetch_metadata,
+    get_connection,
+    oracle_status,
+)
+from app.services.settings_service import (
+    get_fetch_limit,
+    get_public_runtime_settings,
+    get_runtime_settings,
+    update_runtime_settings,
+)
 
 app = FastAPI(title="SMART2D Backend API", version="0.1.0")
 
@@ -55,11 +70,11 @@ _QUERY_PROGRESS_LOCK = Lock()
 import sys
 _QUERY_CACHE: dict[str, tuple[QueryResponse, float]] = {}  # {hash: (response, timestamp)}
 _QUERY_CACHE_LOCK = Lock()
-_QUERY_CACHE_TTL_SECONDS = 3600
+_QUERY_CACHE_TTL_SECONDS = 60
 _QUERY_CACHE_MAX_BYTES = 256 * 1024 * 1024  # 256 MB
 
 QUERY_STAGE_DEFS = [
-    ("generate_sql", "Generation SQL", "Transformation de la question en requete Oracle"),
+    ("generate_sql", "Interpretation", "Analyse de la question et construction securisee"),
     ("connect_oracle", "Connexion Oracle", "Ouverture de la connexion a la base d audit"),
     ("execute_sql", "Execution", "Lecture des donnees correspondant a la demande"),
     ("build_synthesis", "Traduction", "Transformation de la reponse brute en resume clair"),
@@ -79,20 +94,8 @@ app.add_middleware(
 def startup() -> None:
     init_auth_db()
     init_audit_db()
-    # Warmup: preload models on startup to avoid cold start for first user
-    print("[STARTUP] Warming up TinyLlama...")
-    try:
-        status, err = model_status()
-        print(f"[STARTUP] TinyLlama status: {status}" + (f" ({err})" if err else ""))
-    except Exception as e:
-        print(f"[STARTUP] TinyLlama warmup error: {e}")
-    
-    print("[STARTUP] Warming up Phi-3...")
-    try:
-        status, err = phi3_status()
-        print(f"[STARTUP] Phi-3 status: {status}" + (f" ({err})" if err else ""))
-    except Exception as e:
-        print(f"[STARTUP] Phi-3 warmup error: {e}")
+    status_value, error = local_model_status()
+    print(f"[STARTUP] Qwen local: {status_value}" + (f" ({error})" if error else ""))
 
 
 def _get_query_cache_key(question: str) -> str:
@@ -253,7 +256,9 @@ def _query_progress_response(payload: dict) -> QueryProgressResponse:
     )
 
 
-def _execute_sql_with_progress(sql: str, request_id: str) -> tuple[list[dict], str | None]:
+def _execute_sql_with_progress(
+    sql: str, request_id: str, binds: dict | None = None
+) -> tuple[list[dict], str | None]:
     conn = None
     cur = None
     t_connect_start = time.perf_counter()
@@ -282,7 +287,7 @@ def _execute_sql_with_progress(sql: str, request_id: str) -> tuple[list[dict], s
         )
         t_exec_start = time.perf_counter()
         cur = conn.cursor()
-        cur.execute(sql.rstrip().rstrip(";"))
+        cur.execute(sql.rstrip().rstrip(";"), binds or {})
         cols = [d[0].upper() for d in cur.description]
         rows = cur.fetchall()
         payload = [dict(zip(cols, row)) for row in rows]
@@ -313,47 +318,80 @@ def _execute_sql_with_progress(sql: str, request_id: str) -> tuple[list[dict], s
 
 
 def _execute_query_pipeline(req: QueryRequest, username: str, request_id: str | None = None) -> QueryResponse:
-    """Execute query pipeline with full resource allocation for optimal model performance."""
     t0 = time.perf_counter()
-
     if request_id is not None:
         _update_query_progress(
             request_id,
             stage_key="generate_sql",
             stage_status="running",
-            current_summary="Generation de la requete SQL en cours",
+            current_summary="Interpretation securisee de la question",
         )
 
     t_sql_start = time.perf_counter()
-    sql = generate_sql_from_question(req.question)
-    t_sql_end = time.perf_counter()
+    known_users, known_objects = fetch_intent_catalog()
+    intent, model_warning = interpret_question(req.question, known_users, known_objects)
+    intent_status = str(intent.get("status") or "clarification")
+    clarification = intent.get("clarification")
+    sql = ""
+    binds: dict = {}
+    blocked = intent_status == "refusal"
+    rows: list[dict] = []
+    error: str | None = None
 
+    if intent_status == "query":
+        try:
+            safe_query = build_safe_audit_query(intent, default_limit=get_fetch_limit())
+            sql = safe_query.sql
+            binds = safe_query.binds
+        except UnsafeIntentError as exc:
+            intent_status = "refusal"
+            blocked = True
+            clarification = f"Demande bloquee par les controles de securite : {exc}"
+
+    t_sql_end = time.perf_counter()
     if request_id is not None:
         _update_query_progress(
             request_id,
             stage_key="generate_sql",
             stage_status="completed",
             duration_seconds=t_sql_end - t_sql_start,
-            current_summary="Requete SQL generee",
+            current_summary=(
+                "Requete de lecture construite"
+                if sql
+                else "Aucune execution necessaire"
+            ),
         )
 
-    if request_id is not None:
-        rows, error = _execute_sql_with_progress(sql, request_id)
-    else:
-        rows, error = execute_sql(sql)
-
-    blocked = False
+    if sql:
+        if request_id is not None:
+            rows, error = _execute_sql_with_progress(sql, request_id, binds)
+        else:
+            rows, error = execute_sql(sql, binds)
+    elif request_id is not None:
+        for stage_key in ("connect_oracle", "execute_sql"):
+            _update_query_progress(
+                request_id,
+                stage_key=stage_key,
+                stage_status="completed",
+                duration_seconds=0.0,
+                current_summary="Etape ignoree : aucune requete a executer",
+            )
 
     if request_id is not None:
         _update_query_progress(
             request_id,
             stage_key="build_synthesis",
             stage_status="running",
-            current_summary="Traduction de la reponse brute en langage clair",
+            current_summary="Preparation de la reponse en langage clair",
         )
 
     t_syn_start = time.perf_counter()
-    synthesis = build_synthesis(req.question, rows, error)
+    if intent_status in {"clarification", "refusal"}:
+        synthesis = str(clarification or (
+            "Precisez l'utilisateur, l'objet, l'action ou la periode a examiner."
+        ))
+    else:
+        synthesis = build_local_synthesis(req.question, rows, error)
     t_syn_end = time.perf_counter()
 
     if request_id is not None:
@@ -362,18 +400,17 @@ def _execute_query_pipeline(req: QueryRequest, username: str, request_id: str | 
             stage_key="build_synthesis",
             stage_status="completed",
             duration_seconds=t_syn_end - t_syn_start,
-            current_summary="Synthese terminee",
+            current_summary="Reponse preparee",
         )
         _update_query_progress(
             request_id,
             stage_key="finalize",
             stage_status="running",
-            current_summary="Preparation de la reponse finale",
+            current_summary="Preparation du resultat",
         )
 
     t_post_start = time.perf_counter()
     fetch_limit = get_fetch_limit()
-
     entry = {
         "timestamp": int(time.time()),
         "username": username,
@@ -382,26 +419,27 @@ def _execute_query_pipeline(req: QueryRequest, username: str, request_id: str | 
         "synthesis": synthesis,
         "row_count": len(rows),
         "blocked": blocked,
+        "intent_status": intent_status,
+        "clarification": clarification,
+        "model_warning": model_warning,
         "error": error,
     }
     QUERY_HISTORY.append(entry)
     if len(QUERY_HISTORY) > 200:
         del QUERY_HISTORY[:-200]
 
-    status_value = "ok"
-    detail_value = "Execution terminee"
-    if error:
-        status_value = "error"
-        detail_value = error
-
+    result_status = "error" if error else ("blocked" if blocked else "ok")
+    details = error or clarification or "Execution terminee"
+    if model_warning:
+        details = f"{details}; avertissement modele local: {model_warning}"
     write_audit_log(
         username=username,
         action="query_execute",
-        result_status=status_value,
+        result_status=result_status,
         question=req.question,
         sql_text=sql,
         row_count=len(rows),
-        details=detail_value,
+        details=details,
     )
 
     response = QueryResponse(
@@ -411,22 +449,18 @@ def _execute_query_pipeline(req: QueryRequest, username: str, request_id: str | 
         rows=rows[:fetch_limit],
         row_count=len(rows),
         blocked=blocked,
+        intent_status=intent_status,
+        clarification=str(clarification) if clarification else None,
         error=error,
     )
-
     t_post_end = time.perf_counter()
-    t_total = t_post_end - t0
     print(
         "[QUERY_TIMING] "
-        f"user={username} "
-        f"question_len={len(req.question)} "
-        f"total={t_total:.3f}s "
-        f"generate_sql={t_sql_end - t_sql_start:.3f}s "
+        f"user={username} total={t_post_end - t0:.3f}s "
+        f"interpret_build={t_sql_end - t_sql_start:.3f}s "
         f"execute_oracle={t_syn_start - t_sql_end:.3f}s "
-        f"build_synthesis={t_syn_end - t_syn_start:.3f}s "
-        f"history_audit={t_post_end - t_post_start:.3f}s "
-        f"rows={len(rows)} "
-        f"error={'yes' if error else 'no'}"
+        f"synthesis={t_syn_end - t_syn_start:.3f}s "
+        f"rows={len(rows)} status={intent_status}"
     )
 
     if request_id is not None:
@@ -439,7 +473,6 @@ def _execute_query_pipeline(req: QueryRequest, username: str, request_id: str | 
             status="completed",
             result=response,
         )
-
     return response
 
 
@@ -603,9 +636,8 @@ def admin_audit_logs(
 @app.get("/api/health", response_model=HealthResponse)
 def health(_: dict = Depends(get_current_user)) -> HealthResponse:
     oracle = oracle_status()
-    tinyllama, _ = model_status()
-    phi3, _ = phi3_status()
-    return HealthResponse(status="ok", oracle=oracle, tinyllama=tinyllama, phi3=phi3)
+    model, _ = local_model_status()
+    return HealthResponse(status="ok", oracle=oracle, model=model)
 
 
 @app.get("/api/metadata", response_model=MetadataResponse)
@@ -622,7 +654,7 @@ def history(current_user: dict = Depends(get_current_user)) -> list[dict]:
 
 @app.get("/api/settings", response_model=RuntimeSettings)
 def read_settings(_: dict = Depends(get_current_user)) -> RuntimeSettings:
-    return RuntimeSettings(**get_runtime_settings())
+    return RuntimeSettings(**get_public_runtime_settings())
 
 
 @app.post("/api/settings", response_model=RuntimeSettings)

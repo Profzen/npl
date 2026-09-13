@@ -14,6 +14,8 @@ class QueryResponse(BaseModel):
     rows: list[dict[str, Any]]
     row_count: int
     blocked: bool = False
+    intent_status: str = "query"
+    clarification: str | None = None
     error: str | None = None
 
 
@@ -43,8 +45,9 @@ class QueryProgressResponse(BaseModel):
 class HealthResponse(BaseModel):
     status: str
     oracle: str
-    tinyllama: str
-    phi3: str
+    model: str
+    tinyllama: str = "disabled"
+    phi3: str = "disabled"
 
 
 class MetadataResponse(BaseModel):

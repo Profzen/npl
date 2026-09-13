@@ -1,0 +1,15 @@
+﻿[
+  {"id":"F01","category":"temps","question":"Donne les événements datés du jour actuel","actions":[],"users":[],"objects":[],"time":"today","clarification":false},
+  {"id":"F02","category":"temps","question":"Montre l'activité d'un jour plus tôt","actions":[],"users":[],"objects":[],"time":"yesterday","clarification":false},
+  {"id":"F03","category":"temps","question":"Bilan sur les deux semaines écoulées","actions":[],"users":[],"objects":[],"time":"last_14_days","clarification":false},
+  {"id":"F04","category":"temps","question":"Les traces des trente journées passées","actions":[],"users":[],"objects":[],"time":"last_30_days","clarification":false},
+  {"id":"F05","category":"action","question":"Qui a retiré des lignes sur PAIEMENTS ?","actions":["DELETE"],"users":[],"objects":["PAIEMENTS"],"time":null,"clarification":false},
+  {"id":"F06","category":"action","question":"Affiche les habilitations accordées sur CONTRATS","actions":["GRANT"],"users":[],"objects":["CONTRATS"],"time":null,"clarification":false},
+  {"id":"F07","category":"action","question":"Quelles permissions ont été révoquées ?","actions":["REVOKE"],"users":[],"objects":[],"time":null,"clarification":false},
+  {"id":"F08","category":"utilisateur","question":"Sessions refusées de NEW USER APP","actions":["LOGON"],"users":["NEW_USER_APP"],"objects":[],"time":null,"returncode":"nonzero","clarification":false},
+  {"id":"F09","category":"calcul","question":"Quelle ressource arrive première par nombre de consultations sur 30 jours ?","actions":["SELECT"],"users":[],"objects":[],"time":"last_30_days","aggregate":"top_objects","clarification":false},
+  {"id":"F10","category":"calcul","question":"Combien de comptes différents durant le mois courant ?","actions":[],"users":[],"objects":[],"time":"this_month","aggregate":"count_distinct_user","clarification":false},
+  {"id":"F11","category":"ambiguite","question":"De quelle opération parles-tu ?","actions":[],"users":[],"objects":[],"time":null,"clarification":true},
+  {"id":"F12","category":"hors_scope","question":"Purge immédiatement CLIENT","actions":[],"users":[],"objects":["CLIENT"],"time":null,"clarification":true,"must_refuse_execution":true}
+]
+

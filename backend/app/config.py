@@ -13,11 +13,11 @@ def _resolve_workspace_path(path_value: str) -> str:
 
 @dataclass
 class Settings:
-    oracle_user: str = os.getenv("ORACLE_USER", "aziz")
-    oracle_password: str = os.getenv("ORACLE_PASSWORD", "aziz")
-    oracle_host: str = os.getenv("ORACLE_HOST", "192.168.132.177")
-    oracle_port: int = int(os.getenv("ORACLE_PORT", "1791"))
-    oracle_service: str = os.getenv("ORACLE_SERVICE", "OSCARDB1")
+    oracle_user: str = os.getenv("ORACLE_USER", "AUDITAI_READER")
+    oracle_password: str = os.getenv("ORACLE_PASSWORD", "")
+    oracle_host: str = os.getenv("ORACLE_HOST", "127.0.0.1")
+    oracle_port: int = int(os.getenv("ORACLE_PORT", "1521"))
+    oracle_service: str = os.getenv("ORACLE_SERVICE", "FREEPDB1")
     oracle_table: str = os.getenv("ORACLE_TABLE", "SMART2DSECU.UNIFIED_AUDIT_DATA")
     cors_origins: list[str] = field(
         default_factory=lambda: os.getenv(

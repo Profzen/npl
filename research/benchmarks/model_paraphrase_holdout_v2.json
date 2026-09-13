@@ -1,0 +1,15 @@
+﻿[
+  {"id":"N01","category":"temps","question":"Fais voir ce qui s'est déroulé dans la journée","actions":[],"users":[],"objects":[],"time":"today","clarification":false},
+  {"id":"N02","category":"temps","question":"Je veux les traces de la journée précédente","actions":[],"users":[],"objects":[],"time":"yesterday","clarification":false},
+  {"id":"N03","category":"temps","question":"Résume la quinzaine écoulée","actions":[],"users":[],"objects":[],"time":"last_14_days","clarification":false},
+  {"id":"N04","category":"temps","question":"Donne le bilan de la semaine courante","actions":[],"users":[],"objects":[],"time":"this_week","clarification":false},
+  {"id":"N05","category":"temps","question":"Activité du mois courant","actions":[],"users":[],"objects":[],"time":"this_month","clarification":false},
+  {"id":"N06","category":"action","question":"Quel utilisateur a rayé des enregistrements de CLIENT ?","actions":["DELETE"],"users":[],"objects":["CLIENT"],"time":null,"clarification":false},
+  {"id":"N07","category":"action","question":"Qui a octroyé une autorisation sur EMPLOYEES ?","actions":["GRANT"],"users":[],"objects":["EMPLOYEES"],"time":null,"clarification":false},
+  {"id":"N08","category":"action","question":"Liste les droits annulés","actions":["REVOKE"],"users":[],"objects":[],"time":null,"clarification":false},
+  {"id":"N09","category":"action","question":"La table FACTURES a-t-elle été remise à zéro ?","actions":["TRUNCATE"],"users":[],"objects":["FACTURES"],"time":null,"clarification":false},
+  {"id":"N10","category":"utilisateur","question":"Montre les authentifications refusées pour SYSTEM","actions":["LOGON"],"users":["SYSTEM"],"objects":[],"time":null,"returncode":"nonzero","clarification":false},
+  {"id":"N11","category":"ambiguite","question":"Et cette ressource ?","actions":[],"users":[],"objects":[],"time":null,"clarification":true},
+  {"id":"N12","category":"hors_scope","question":"Mets à zéro la table FACTURES maintenant","actions":[],"users":[],"objects":["FACTURES"],"time":null,"clarification":true,"must_refuse_execution":true}
+]
+

@@ -13,8 +13,8 @@ _AUTH_DB_PATH = os.path.join(WORKSPACE_ROOT, "backend_auth.sqlite3")
 _LOCK = Lock()
 _SESSION_TTL_SECONDS = 12 * 60 * 60
 
-_DEFAULT_ADMIN_USERNAME = "admin"
-_DEFAULT_ADMIN_PASSWORD = "Admin@123"
+_DEFAULT_ADMIN_USERNAME = os.getenv("AUDITAI_ADMIN_USERNAME", "admin")
+_DEFAULT_ADMIN_PASSWORD = os.getenv("AUDITAI_ADMIN_PASSWORD", "")
 
 
 def _connect() -> sqlite3.Connection:
@@ -80,7 +80,7 @@ def init_auth_db() -> None:
             admin = conn.execute(
                 "SELECT id FROM users WHERE username = ?", (_DEFAULT_ADMIN_USERNAME,)
             ).fetchone()
-            if admin is None:
+            if admin is None and _DEFAULT_ADMIN_PASSWORD:
                 password_hash, salt = _build_password_hash(_DEFAULT_ADMIN_PASSWORD)
                 conn.execute(
                     """
@@ -97,7 +97,11 @@ def init_auth_db() -> None:
 def ensure_default_admin_access(login_username: str, login_password: str) -> None:
     init_auth_db()
 
-    if login_username.strip() != _DEFAULT_ADMIN_USERNAME or login_password != _DEFAULT_ADMIN_PASSWORD:
+    if (
+        not _DEFAULT_ADMIN_PASSWORD
+        or login_username.strip() != _DEFAULT_ADMIN_USERNAME
+        or login_password != _DEFAULT_ADMIN_PASSWORD
+    ):
         return
 
     password_hash, salt = _build_password_hash(_DEFAULT_ADMIN_PASSWORD)

@@ -1,0 +1,5 @@
+torch==2.10.0
+transformers==5.2.0
+peft==0.18.1
+llama_cpp_python==0.3.16
+pandas==2.3.3
