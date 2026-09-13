@@ -849,3 +849,7 @@ La correction d'origine locale et la documentation doivent être validées par T
 - Oracle connecté, Qwen chargé, 9 utilisateurs et 14 objets visibles ;
 - secret Oracle masqué, agrégation valide, clarification valide et refus destructeur valide ;
 - aucun nouveau message de blocage d'origine dans le journal frontend après redémarrage.
+
+### Publication GitHub effectuée
+
+Le push vers https://github.com/Profzen/npl.git a réussi. La branche distante master a avancé de 93861e6 à cf9d426 et contient les six commits locaux de récupération, d'infrastructure Oracle, d'architecture Qwen, de benchmarks, de documentation technique et de correction du chargement sur 127.0.0.1. Les modèles, secrets, journaux et fichiers runtime ignorés n'ont pas été envoyés.
