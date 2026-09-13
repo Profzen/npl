@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import unittest
+from unittest.mock import patch
 
 from app.services.intent_policy import normalize_intent
 from app.services.local_model_service import build_local_synthesis
@@ -50,6 +51,43 @@ class IntentPolicyTests(unittest.TestCase):
     def test_unknown_conversation_reference_is_clarified(self) -> None:
         intent = normalize_intent("De quelle opération parles-tu ?", {}, USERS, OBJECTS)
         self.assertEqual(intent["status"], "clarification")
+
+    def test_all_allowed_oracle_action_keywords_are_recognized(self) -> None:
+        cases = {
+            "Montre les LOGON": "LOGON",
+            "Montre les LOGOFF": "LOGOFF",
+            "Montre les SELECT": "SELECT",
+            "Montre les INSERT": "INSERT",
+            "Montre les UPDATE": "UPDATE",
+            "Montre les DELETE": "DELETE",
+            "Montre les GRANT": "GRANT",
+            "Montre les REVOKE": "REVOKE",
+            "Montre les ALTER": "ALTER",
+            "Montre les TRUNCATE": "TRUNCATE",
+            "Montre les CREATE USER": "CREATE USER",
+            "Montre les DROP USER": "DROP USER",
+            "Montre les ALTER USER": "ALTER USER",
+            "Montre les CREATE TABLE": "CREATE TABLE",
+            "Montre les DROP TABLE": "DROP TABLE",
+            "Montre les ALTER TABLE": "ALTER TABLE",
+        }
+        for question, expected in cases.items():
+            with self.subTest(question=question):
+                intent = normalize_intent(question, {}, USERS, OBJECTS)
+                self.assertIn(expected, intent["actions"])
+
+    def test_french_action_paraphrases_are_recognized(self) -> None:
+        cases = {
+            "Qui a ajouté des lignes ?": "INSERT",
+            "Qui a mis à jour les données ?": "UPDATE",
+            "Qui s'est déconnecté ?": "LOGOFF",
+            "Qui a retiré les droits ?": "REVOKE",
+            "Qui a attribué des privilèges ?": "GRANT",
+        }
+        for question, expected in cases.items():
+            with self.subTest(question=question):
+                intent = normalize_intent(question, {}, USERS, OBJECTS)
+                self.assertIn(expected, intent["actions"])
 
     def test_hallucinated_entities_are_removed(self) -> None:
         intent = normalize_intent(
@@ -206,6 +244,35 @@ class SynthesisTests(unittest.TestCase):
         )
         self.assertIn("trois derniers utilisateurs", answer)
         self.assertNotIn("200", answer)
+
+    def test_invalid_generated_actor_falls_back_to_factual_answer(self) -> None:
+        rows = [
+            {"DBUSERNAME": name, "ACTION_NAME": "REVOKE", "OBJECT_NAME": "EMPLOYEES"}
+            for name in ["A", "B", "C", "D"]
+        ]
+        with patch(
+            "app.services.local_model_service._chat",
+            return_value="L'audit a révoqué les droits pour A, B, C et D.",
+        ):
+            answer = build_local_synthesis(
+                "Qui a retiré les droits sur EMPLOYEES ?", rows, None
+            )
+        self.assertNotIn("L'audit a", answer)
+        self.assertIn("opération « retrait de droits » sur EMPLOYEES", answer)
+        self.assertIn("A, B, C, D", answer)
+
+    def test_technical_rows_word_triggers_factual_fallback(self) -> None:
+        rows = [
+            {"DBUSERNAME": name, "ACTION_NAME": "INSERT", "OBJECT_NAME": "CLIENT"}
+            for name in ["A", "B", "C", "D"]
+        ]
+        with patch(
+            "app.services.local_model_service._chat",
+            return_value="Le nombre total de lignes est de 4.",
+        ):
+            answer = build_local_synthesis("Montre les quatre INSERT sur CLIENT", rows, None)
+        self.assertNotIn("lignes", answer.lower())
+        self.assertIn("CLIENT", answer)
 
     def test_two_rows_are_explained_as_sentences(self) -> None:
         answer = build_local_synthesis(

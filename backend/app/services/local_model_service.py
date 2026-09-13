@@ -25,7 +25,7 @@ Périodes: today, yesterday, last_friday, range_weekdays, last_14_days, night_ra
 this_week, this_month, last_30_days, compare_today_yesterday ou null.
 Agrégats: count_distinct_user, top_action, compare, top_host, top_user, top_objects, latest_users ou null.
 Actions: LOGON, LOGOFF, SELECT, INSERT, UPDATE, DELETE, GRANT, REVOKE, ALTER, TRUNCATE,
-CREATE USER, DROP USER, ALTER USER, CREATE TABLE, DROP TABLE.
+CREATE USER, DROP USER, ALTER USER, CREATE TABLE, DROP TABLE, ALTER TABLE.
 Une question sur une suppression ou un droit est une consultation d'audit.
 Un ordre réel de modifier les données est refusal.
 Une référence inexploitable ou une date ambiguë est clarification."""
@@ -33,8 +33,9 @@ Une référence inexploitable ou une date ambiguë est clarification."""
 _SYNTHESIS_PROMPT = """Tu expliques un résultat d'audit Oracle à une personne non informaticienne.
 Réponds en français, directement, en 1 à 5 phrases, avec une formulation naturelle adaptée à la question.
 Conserve exactement les noms, nombres, dates, heures et postes fournis.
-N'invente aucun fait. Ne parle ni de SQL, ni de colonnes, ni de modèle.
-Résume les faits pertinents. Mentionne le nombre total seulement s'il aide directement à répondre.
+N'invente aucun fait. Ne parle ni de SQL, ni de colonnes, ni de modèle, ni de lignes techniques.
+Attribue une action uniquement aux utilisateurs fournis. Ne dis jamais que l'audit, le journal, la base ou le système a effectué une action.
+Résume les faits pertinents. Mentionne le nombre d'événements seulement s'il aide directement à répondre.
 Ne présente jamais une limite technique de résultats comme un fait métier."""
 
 _ACTION_FR = {
@@ -223,7 +224,42 @@ def _rule_synthesis(
         if _is_latest_user_question(question):
             return f"Voici les {count_label.lower()} derniers utilisateurs concernés. " + ". ".join(descriptions) + "."
         return f"{count_label} événements correspondent à la demande. " + ". ".join(descriptions) + "."
+    normalized_rows = [
+        {str(key).upper(): value for key, value in raw_row.items() if value is not None}
+        for raw_row in rows
+    ]
+    users = list(dict.fromkeys(
+        str(row["DBUSERNAME"]) for row in normalized_rows if row.get("DBUSERNAME")
+    ))
+    actions = list(dict.fromkeys(
+        _ACTION_FR.get(str(row["ACTION_NAME"]).upper(), str(row["ACTION_NAME"]))
+        for row in normalized_rows if row.get("ACTION_NAME")
+    ))
+    objects = list(dict.fromkeys(
+        str(row["OBJECT_NAME"]) for row in normalized_rows if row.get("OBJECT_NAME")
+    ))
+    if users:
+        context = "Pour les événements correspondants"
+        if len(actions) == 1:
+            context = f"Pour l'opération « {actions[0]} »"
+        if len(objects) == 1:
+            context += f" sur {objects[0]}"
+        return f"{context}, les utilisateurs concernés sont : {', '.join(users)}."
     return "Plusieurs événements correspondent à la demande. Consultez le tableau pour le détail exact."
+
+
+def _generated_synthesis_is_acceptable(answer: str) -> bool:
+    normalized = unicodedata.normalize("NFKD", answer)
+    normalized = "".join(char for char in normalized if not unicodedata.combining(char)).upper()
+    normalized = re.sub(r"[^A-Z0-9]+", " ", normalized).strip()
+    if not normalized:
+        return False
+    if re.search(r"\b(SQL|COLONNES?|MODELES?|LIGNES?)\b", normalized):
+        return False
+    return not re.search(
+        r"\b(L AUDIT|LE JOURNAL|LA BASE|LE SYSTEME)\s+A\b",
+        normalized,
+    )
 
 
 def build_local_synthesis(question: str, rows: list[dict[str, Any]], error: str | None) -> str:
@@ -237,7 +273,10 @@ def build_local_synthesis(question: str, rows: list[dict[str, Any]], error: str 
         + json.dumps(compact_rows, ensure_ascii=False, default=_json_default)
     )
     try:
-        return _chat(_SYNTHESIS_PROMPT, user_content[:5000], max_tokens=180)
+        answer = _chat(_SYNTHESIS_PROMPT, user_content[:5000], max_tokens=180)
+        if _generated_synthesis_is_acceptable(answer):
+            return answer
+        return _rule_synthesis(rows, error, question)
     except Exception:
         return _rule_synthesis(rows, error, question)
 

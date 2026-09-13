@@ -27,49 +27,96 @@ def _catalog_matches(question_norm: str, values: Iterable[str]) -> list[str]:
 
 def _detect_actions(text: str) -> list[str]:
     actions: list[str] = []
-    create_account = re.search(
-        r"\b(CREE|CREER|CREATION)\b.*\b(COMPTES?|UTILISATEURS?)\b", text
+
+    def add(action: str) -> None:
+        if action not in actions:
+            actions.append(action)
+
+    create_user = bool(
+        re.search(r"\bCREATE\s+USER\b", text)
+        or re.search(r"\b(CREE|CREER|CREATION|OUVRE|OUVRIR)\b.*\b(COMPTES?|UTILISATEURS?)\b", text)
     )
-    drop_account = re.search(
-        r"\b(SUPRIME|SUPRIMER|SUPPRIME|SUPPRIMER|SUPPRESSIONS?)\b.*"
-        r"\b(COMPTES?|UTILISATEURS?)\b",
-        text,
-    )
-    if create_account:
-        actions.append("CREATE USER")
-    if drop_account:
-        actions.append("DROP USER")
-    if not drop_account and (
-        re.search(
-            r"\b(SUPRIME|SUPRIMER|SUPPRIME|SUPPRIMER|SUPPRESSIONS?|EFFACE|EFFACER|DELETE)\b",
+    drop_user = bool(
+        re.search(r"\bDROP\s+USER\b", text)
+        or re.search(
+            r"\b(SUPRIME|SUPRIMER|SUPPRIME|SUPPRIMER|EFFACE|EFFACER)\b.*"
+            r"\b(COMPTES?|UTILISATEURS?)\b",
             text,
         )
-        or re.search(r"\bRETIRE\b.*\b(LIGNES?|ENREGISTREMENTS?)\b", text)
+    )
+    alter_user = bool(
+        re.search(r"\bALTER\s+USER\b", text)
+        or re.search(r"\b(MODIFIE|MODIFIER|CHANGE|CHANGER)\b.*\b(COMPTES?|UTILISATEURS?)\b", text)
+    )
+    create_table = bool(
+        re.search(r"\bCREATE\s+TABLE\b", text)
+        or re.search(r"\b(CREE|CREER|CREATION)\b.*\bTABLES?\b", text)
+    )
+    drop_table = bool(
+        re.search(r"\bDROP\s+TABLE\b", text)
+        or re.search(
+            r"\b(SUPRIME|SUPRIMER|SUPPRIME|SUPPRIMER|EFFACE|EFFACER)\b.*\bTABLES?\b",
+            text,
+        )
+    )
+    alter_table = bool(
+        re.search(r"\bALTER\s+TABLE\b", text)
+        or re.search(r"\b(MODIFIE|MODIFIER|CHANGE|CHANGER)\b.*\bSTRUCTURES?\b.*\bTABLES?\b", text)
+    )
+
+    for matched, action in (
+        (create_user, "CREATE USER"),
+        (drop_user, "DROP USER"),
+        (alter_user, "ALTER USER"),
+        (create_table, "CREATE TABLE"),
+        (drop_table, "DROP TABLE"),
+        (alter_table, "ALTER TABLE"),
     ):
-        actions.append("DELETE")
-    if re.search(r"\b(DONNE|DONNER|ACCORDE|ACCORDER)\b.*\b(DROITS?|PRIVILEGES?)\b", text):
-        actions.append("GRANT")
+        if matched:
+            add(action)
+
+    if not drop_user and not drop_table and (
+        re.search(r"\bDELETE\b", text)
+        or re.search(
+            r"\b(SUPRIME|SUPRIMER|SUPPRIME|SUPPRIMER|SUPPRESSIONS?|EFFACE|EFFACER)\b",
+            text,
+        )
+        or re.search(r"\bRETIRE\b.*\b(LIGNES?|ENREGISTREMENTS?|DONNEES?)\b", text)
+    ):
+        add("DELETE")
     if (
-        re.search(r"\b(PRIVILEGES?|DROITS?)\b.*\b(RETIRE|RETIRES|REVOQUE|REVOQUES)\b", text)
-        or re.search(r"\bRETRAITS?\b.*\b(AUTORISATIONS?|DROITS?|PRIVILEGES?)\b", text)
+        re.search(r"\bGRANT\b", text)
+        or re.search(r"\b(DONNE|DONNER|ACCORDE|ACCORDER|ATTRIBUE|ATTRIBUER)\b.*\b(DROITS?|PRIVILEGES?)\b", text)
     ):
-        actions.append("REVOKE")
-    if re.search(r"\b(VIDE|VIDER|TRUNCATE|PURGE|PURGER)\b", text):
-        actions.append("TRUNCATE")
+        add("GRANT")
+    if (
+        re.search(r"\bREVOKE\b", text)
+        or re.search(r"\b(PRIVILEGES?|DROITS?)\b.*\b(RETIRE|RETIRES|REVOQUE|REVOQUES)\b", text)
+        or re.search(r"\b(RETRAITS?|RETIRE|RETIRER|REVOQUE|REVOQUER)\b.*\b(AUTORISATIONS?|DROITS?|PRIVILEGES?)\b", text)
+    ):
+        add("REVOKE")
+    if re.search(r"\b(TRUNCATE|TRONQUE|TRONQUER|VIDE|VIDER|PURGE|PURGER)\b", text):
+        add("TRUNCATE")
+    if re.search(r"\b(LOGOFF|DECONNEXIONS?|DECONNECTE|FERMETURES?\s+DE\s+SESSION)\b", text):
+        add("LOGOFF")
     if re.search(
-        r"\b(CONNEXIONS?|CONNECTE|LOGIN|LOGON)\b|"
-        r"\bOUVERTURES?\s+DE\s+SESSION\b|"
+        r"\b(LOGON|LOGIN|CONNEXIONS?|CONNECTE)\b|\bOUVERTURES?\s+DE\s+SESSION\b|"
         r"\bSESSIONS?\b.*\b(REFUSEES?|REJETEES?|ECHOUES?)\b",
         text,
     ):
-        actions.append("LOGON")
-    if re.search(r"\b(CONSULTE|CONSULTEES|LECTURE|SELECT)\b", text):
-        actions.append("SELECT")
-    if re.search(r"\bMODIFICATIONS?\b", text):
-        actions.extend(["UPDATE", "ALTER"])
-    elif re.search(r"\b(MODIFIE|MODIFIER)\b", text):
-        actions.append("UPDATE")
-    return list(dict.fromkeys(actions))
+        add("LOGON")
+    if re.search(r"\b(SELECT|CONSULTE|CONSULTER|CONSULTEES|LECTURE|LIT|LIRE)\b", text):
+        add("SELECT")
+    if re.search(r"\b(INSERT|INSERTS|INSERE|INSERER|INSERTIONS?|AJOUTE|AJOUTER)\b", text):
+        add("INSERT")
+    if not alter_user and not alter_table and re.search(
+        r"\b(UPDATE|UPDATES|MIS(?:E|ES)?\s+A\s+JOUR|MODIFICATIONS?|MODIFIE|MODIFIER)\b",
+        text,
+    ):
+        add("UPDATE")
+    if not alter_user and not alter_table and re.search(r"\bALTER\b", text):
+        add("ALTER")
+    return actions
 
 def _detect_period(text: str) -> str | None:
     if re.search(r"\bHIER\b.*\bAUJOURD HUI\b|\bAUJOURD HUI\b.*\bHIER\b|COMPARE.*\bHIER\b.*\bAUJOURD HUI\b", text):

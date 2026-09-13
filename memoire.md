@@ -1015,3 +1015,41 @@ La suite de tests backend contient maintenant 20 cas, tous réussis. Elle couvre
 ### Portée du résultat
 
 Ces trois requêtes sont désormais conformes à leur question et ont été vérifiées de bout en bout. Ce correctif ajoute une capacité sémantique générale sur les utilisateurs récents ; il ne justifie pas d'annoncer 100 % de précision pour toute question future. La mesure de généralisation de référence reste 89,1 % sur le premier passage aveugle v3. Les formulations nouvelles continueront à servir de cas d'évaluation et de non-régression.
+
+## 25. Généralisation des actions Oracle et contrôle des synthèses — 13 septembre 2026
+
+### Motivation
+
+Après l'ajout explicite de DELETE, une revue de la politique d'intention a montré que les autres mots-clés Oracle ne disposaient pas tous du même niveau de reconnaissance déterministe. Certaines actions dépendaient alors davantage de la classification de Qwen. Cette asymétrie était indésirable pour un assistant local utilisant un petit modèle, car un filtre d'action explicitement écrit par l'utilisateur ne doit pas être perdu.
+
+### Ontologie d'actions unifiée
+
+La détection couvre maintenant l'ensemble des actions de lecture d'audit autorisées par le constructeur SQL : LOGON, LOGOFF, SELECT, INSERT, UPDATE, DELETE, GRANT, REVOKE, ALTER, TRUNCATE, CREATE USER, DROP USER, ALTER USER, CREATE TABLE, DROP TABLE et ALTER TABLE. Les mots SQL sont reconnus directement au milieu d'une question en français.
+
+Des familles de synonymes français sont également normalisées : connexion et ouverture de session vers LOGON ; déconnexion et fermeture de session vers LOGOFF ; consultation et lecture vers SELECT ; ajout et insertion vers INSERT ; mise à jour et modification vers UPDATE ; suppression de données vers DELETE ; attribution de droits vers GRANT ; retrait de droits vers REVOKE ; vidage ou purge vers TRUNCATE. Les créations, suppressions et modifications de comptes ou de tables sont distinguées des opérations effectuées sur leurs données.
+
+Cette couche n'est pas un catalogue de questions préfabriquées. Qwen continue d'analyser chaque phrase et peut proposer une intention lorsque la formulation est indirecte. La normalisation lexicale et l'ontologie contrôlée servent de garde-fou pour les informations explicites. Le pipeline reste donc hybride : compréhension contextuelle par le modèle, validation par le catalogue réel, normalisation déterministe des concepts Oracle, puis construction SQL sûre avec paramètres liés.
+
+### Validation des actions et des quantités
+
+Un test paramétré vérifie chacun des seize libellés d'action autorisés. Un second test emploie des reformulations françaises nouvelles, notamment « ajouté des lignes », « mis à jour les données », « s'est déconnecté », « retiré les droits » et « attribué des privilèges ». La suite comporte désormais 24 tests, tous réussis.
+
+Trois essais de bout en bout supplémentaires ont été exécutés sur Oracle :
+
+- « Montre les deux dernières déconnexions » : filtre LOGOFF, `FETCH FIRST 2 ROWS ONLY`, deux événements ;
+- « Quels sont les cinq derniers INSERT sur CLIENT ? » : filtres INSERT et CLIENT, `FETCH FIRST 5 ROWS ONLY`, cinq événements ;
+- « Qui a retiré les droits sur EMPLOYEES ? » : filtres REVOKE et EMPLOYEES, plafond configuré à dix résultats.
+
+Ces essais confirment que les quantités deux et cinq ne sont pas liées aux anciennes phrases de test et que les filtres d'action se combinent avec les objets et la limite configurée.
+
+### Contrôle de fidélité de la synthèse
+
+Pendant l'essai REVOKE, Qwen a produit une phrase grammaticalement trompeuse attribuant l'action à « l'audit ». Le prompt a été renforcé pour rappeler que l'audit, le journal, la base et le système sont des sources d'information et ne sont jamais les auteurs des opérations. Le vocabulaire interne comme SQL, colonne, modèle ou ligne technique est également interdit dans la réponse destinée à l'utilisateur.
+
+Une simple consigne n'étant pas une garantie avec un petit modèle, un validateur contrôle maintenant chaque synthèse générative. Une réponse vide, une réponse utilisant du vocabulaire technique interdit ou une réponse attribuant une action à l'audit, au journal, à la base ou au système est rejetée. Le système produit alors une synthèse factuelle à partir des valeurs Oracle contrôlées : action, objet et liste dédupliquée des utilisateurs.
+
+Après cette correction, la question sur les retraits de droits répond : « Pour l'opération “retrait de droits” sur EMPLOYEES, les utilisateurs concernés sont : PROD2_MDS, AUDIT_MANAGER, NEW_USER_APP, SYSTEM, CYRILLE_TBS, HR. » Le SQL conserve les filtres REVOKE et EMPLOYEES. Le contrôle local complet confirme Oracle connecté, Qwen chargé, API et frontend disponibles, secret masqué, clarification, refus des mutations, résultat court et historique.
+
+### Interprétation du caractère intelligent
+
+Dans ce projet, l'intelligence ne signifie pas laisser le modèle inventer librement le SQL. Elle correspond à sa capacité à interpréter des formulations variées, combinée à une représentation explicite du domaine et à des contrôles qui garantissent que la requête et la réponse restent fidèles. Cette architecture peut traiter des phrases jamais vues lorsqu'elles expriment un concept connu, tout en demandant une reformulation lorsqu'aucune interprétation sûre ne peut être établie. Le score de généralisation officiel reste 89,1 % sur le premier corpus aveugle v3 ; les nouveaux tests mesurent la non-régression de ce lot et ne remplacent pas cette mesure.
