@@ -1406,3 +1406,21 @@ Le validateur relie désormais la construction « le plus de » à toute action 
 Un test de non-régression reproduit le plan imparfait observé et exige un groupement par objet, COUNT des événements, EVENT_COUNT DESC, filtre DELETE, période relative de cinq semaines et limite un. La suite backend compte maintenant 63 tests réussis.
 
 Après rechargement de l’API, la question exacte a été rejouée avec Qwen léger et Oracle. Le SQL final filtre DELETE, applique cinq semaines sous forme de 35 jours liés, exclut OBJECT_NAME nul, groupe par OBJECT_NAME, trie EVENT_COUNT DESC et limite à une ligne. Le résultat réel est AUDIT_LOG avec 11 événements. La synthèse répond : « L’objet ayant le plus d’événements est AUDIT_LOG, avec 11 événement(s). »
+
+## 33. Décision proposée face aux échecs répétés du modèle 1,5B — 14 septembre 2026
+
+Les nouvelles variations montrent que Qwen2.5-Coder-1.5B ne doit plus être considéré comme le moteur cible de production. Il reconnaît souvent une partie de la demande, mais perd régulièrement une relation essentielle entre acteur, action, période, groupement ou classement. Les règles ajoutées jusqu’ici ne contiennent ni réponses Oracle ni couples question-réponse complets ; elles décrivent des opérateurs généraux. Cependant, leur accumulation commence à transformer le validateur de sécurité en second interpréteur linguistique, ce qui recrée la rigidité que le projet veut éviter.
+
+La direction recommandée est désormais la suivante :
+
+1. arrêter d’ajouter des synonymes après chaque échec ;
+2. conserver le compilateur déterministe seulement pour les types, les valeurs autorisées, les paramètres liés, la lecture seule et les invariants SQL ;
+3. figer avant comparaison un nouveau corpus aveugle de formulations naturelles, distinct des exemples de prompt et des questions déjà corrigées ;
+4. comparer localement Qwen3-4B et Gemma 3 4B instruction-tuned en quantification Q4, avec exactement le même contrat de plan, le même corpus, la même limite de sortie et les mêmes métriques ;
+5. retenir le modèle qui obtient le meilleur taux de plans entièrement corrects avec une latence acceptable sur la machine ;
+6. ne lancer un entraînement LoRA/QLoRA qu’après cette sélection, sur des couples question française vers plan sémantique, jamais sur des réponses Oracle mémorisées ;
+7. conserver un jeu de test totalement séparé pour mesurer la généralisation après entraînement.
+
+Gemini est un service accessible par API distante et ne respecte pas la contrainte de fonctionnement final sans Internet. La famille Gemma fournit en revanche des poids ouverts exécutables localement. Gemma 3 4B instruction-tuned Q4_K_M occupe environ 2,49 Go selon la distribution GGUF de ggml-org et vise les ordinateurs de bureau ou petits serveurs. Qwen3-4B est un modèle 4B post-entraîné, multilingue et orienté suivi d’instructions et outils. Ces deux candidats devraient être plus capables que le 1,5B tout en étant sensiblement moins lourds que le 7B déjà testé.
+
+L’entraînement immédiat du 1,5B n’est pas recommandé. Un LoRA peut améliorer le respect du format et du domaine, mais ne garantit pas qu’un petit modèle acquière la capacité générale qui lui manque. L’ordre scientifique correct est : corpus aveugle, comparaison des modèles de base, sélection, puis entraînement éventuel du gagnant sur Kaggle ou Colab et nouvelle évaluation aveugle. Le profil 1,5B reste utile comme mode de secours léger.
