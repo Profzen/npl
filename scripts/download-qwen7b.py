@@ -53,9 +53,12 @@ def download_piece(index: int) -> None:
             with urllib.request.urlopen(request, timeout=90) as response:
                 if response.status != 206:
                     raise RuntimeError(f"HTTP {response.status}; réponse partielle attendue")
+                deadline = time.monotonic() + 30
                 with path.open("ab") as output:
                     while block := response.read(1024 * 1024):
                         output.write(block)
+                        if time.monotonic() >= deadline:
+                            break
         except Exception as exc:
             report(f"Segment {index}: reprise à {current}/{expected} après {type(exc).__name__}")
             time.sleep(2)

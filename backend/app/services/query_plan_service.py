@@ -163,6 +163,8 @@ def normalize_query_plan(
 
     order_by: list[dict[str, str]] = []
     raw_order = payload.get("order_by")
+    if isinstance(raw_order, Mapping):
+        raw_order = [raw_order]
     if isinstance(raw_order, list):
         for item in raw_order[:5]:
             if not isinstance(item, Mapping):
@@ -200,6 +202,15 @@ def normalize_query_plan(
             comparison_ranges.append({"label": label, "time": period})
 
     clarification = _text(payload.get("clarification")) or None
+
+    if status == "query" and response_mode == "ranking" and calculation is not None and not group_by:
+        if source in {"users", "objects", "actions"}:
+            group_by = [{"users": "user", "objects": "object", "actions": "action"}[source]]
+        elif len(dimensions) == 1:
+            group_by = list(dimensions)
+
+    if status == "query" and source in {"users", "objects", "actions"} and (calculation is not None or group_by):
+        source = "events"
 
     if status == "query" and source in {"users", "objects", "actions"}:
         source_field = {"users": "user", "objects": "object", "actions": "action"}[source]

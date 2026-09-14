@@ -23,7 +23,7 @@ Le profil auto est utilisé par défaut : il choisit le 7B si son fichier comple
     powershell -ExecutionPolicy Bypass -File .\scripts\start-local.ps1 -ModelProfile quality
     powershell -ExecutionPolicy Bypass -File .\scripts\start-local.ps1 -ModelProfile light
 
-Le profil qualité est destiné aux tests de compréhension et à l'usage final. Le profil léger permet de développer lorsque la mémoire est limitée. Il faut arrêter le profil courant avant d'en sélectionner un autre. Une machine disposant de 16 Go de RAM physique est recommandée pour faire cohabiter plus confortablement le 7B, Oracle, FastAPI et Next.js ; le swap évite certains échecs mémoire mais ne donne pas la fluidité de la RAM physique.
+Le profil qualité est destiné aux tests de compréhension et à l'usage final. Le profil léger permet de développer lorsque la mémoire est limitée. Un seul profil et un seul processus llama-server sont chargés à la fois ; l'autre modèle reste uniquement sur le disque. Il faut arrêter le profil courant avant d'en sélectionner un autre. Une machine disposant de 16 Go de RAM physique est recommandée pour faire cohabiter plus confortablement le 7B, Oracle, FastAPI et Next.js ; le swap évite certains échecs mémoire mais ne donne pas la fluidité de la RAM physique.
 
 Si le 7B manque, son téléchargement officiel, reprenable et contrôlé par SHA-256 se lance avec :
 

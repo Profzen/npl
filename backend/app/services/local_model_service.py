@@ -149,7 +149,7 @@ def interpret_question(
             f"Objets connus : {json.dumps(list(known_objects), ensure_ascii=False)}\n"
             f"Question : {question}"
         )
-        content = _chat(_INTENT_PROMPT, context, max_tokens=520, json_mode=True)
+        content = _chat(_INTENT_PROMPT, context, max_tokens=160, json_mode=True)
         parsed = json.loads(content)
         if isinstance(parsed, dict):
             raw_intent = parsed

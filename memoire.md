@@ -1223,3 +1223,57 @@ scripts/download-qwen7b.py est maintenant versionné. Il reprend 64 morceaux ave
 scripts/test-local.ps1 a été adapté au nouveau contrat. Il vérifie désormais que la dernière personne est obtenue par tri temporel sans comptage, que le classement sur dix jours contient la période liée, le groupement et la limite un, et qu’une liste de tables ne contient que OBJECT_NAME. Ce test doit être exécuté après le premier démarrage complet du profil quality ; il n’est pas compté comme réussi dans ce checkpoint.
 
 Le tri frontend utilise désormais l’ordre inverse des entrées reçues plutôt que les seules secondes de leurs dates. Plusieurs questions posées durant la même seconde conservent ainsi l’ordre réel le plus récent en premier. Le contrôle TypeScript local passe après cette modification. Le script ESLint ne peut pas être exécuté dans l’installation actuelle, car le binaire eslint n’est pas présent dans node_modules malgré la présence du script npm ; aucune dépendance supplémentaire n’a été installée pour ce seul contrôle.
+
+## 28. Téléchargement et essai matériel de Qwen2.5-Coder 7B Q4 — 14 septembre 2026
+
+### Topologie des modèles
+
+Le fichier officiel qwen2.5-coder-7b-instruct-q4_k_m.gguf est entièrement téléchargé dans models/qwen2.5-coder-7b. Le téléchargeur a validé la taille exacte de 4 683 073 536 octets et l’empreinte SHA-256 attendue 509287f78cb4d4cf6b3843734733b914b2c158e43e22a7f4bf5e963800894d3c, puis a supprimé les 64 morceaux temporaires. Le fichier reste exclu de Git.
+
+Les profils quality et light sont des choix exclusifs. Le lanceur n’exécute qu’un seul llama-server sur le port 8080. En profil quality, seul le 7B est chargé ; le 1,5B reste sur le disque et ne consomme aucune RAM. En profil light, la situation est inversée. Le profil auto choisit maintenant le 7B puisque son fichier complet existe. Le délai d’inférence est de 240 secondes en quality et de 120 secondes en light. La sortie du plan 7B est plafonnée à 160 tokens pour éviter une génération anormalement longue.
+
+Le téléchargeur reprend désormais volontairement une connexion toutes les trente secondes. Cette rotation a évité que certains segments restent bloqués tout en conservant leur progression.
+
+### Matériel réellement mesuré
+
+La machine possède 8 075 Mo de RAM physique, un Intel Core i7-4510U à deux cœurs et quatre processeurs logiques, ainsi qu’une GeForce 840M de 2 Go. La distribution locale de llama.cpp est une version CPU ; elle ne contient aucun backend CUDA et la commande nvidia-smi n’est pas disponible. La mémoire vidéo n’accélère donc pas le modèle dans l’état courant.
+
+Le premier chargement du 7B a pris environ 1 minute 42 secondes. Son working set a atteint environ 3,48 Go avec Oracle actif. WSL affichait environ 523 Mo de working set mais près de 4 Go de mémoire privée réservée. Il ne restait alors que 276 Mo de RAM physique libre lors du premier chargement. Après arrêt d’Oracle et de WSL, le working set visible du modèle est descendu à environ 2,3 Go et les inférences se sont accélérées.
+
+Le swap SSD évite certains échecs d’allocation, mais il ne remplace pas la RAM physique. Avec Oracle et le 7B réunis, le système relit fréquemment des pages mémoire depuis le disque. Seize gigaoctets de RAM physique réduiraient fortement cette pression. Le processeur ancien à deux cœurs restera toutefois une limite : 16 Go physiques rendront le système plus stable et sensiblement plus rapide, sans garantir une réponse instantanée du 7B.
+
+### Résultats observés avec le 7B
+
+Le premier appel avec le contrat JSON riche et un petit catalogue de sonde a produit 113 tokens en 127,5 secondes. Le plan comprenait correctement le comptage, la dimension action, le tri décroissant et la limite un pour « Quelle action est la plus fréquente ? ». Il avait cependant déclaré source=actions au lieu de events et envoyé order_by comme objet plutôt que comme liste.
+
+Deux réparations structurelles générales ont été ajoutées dans query_plan_service.py :
+
+- un objet order_by unique est accepté comme une liste d’un élément ;
+- une source users, objects ou actions associée à un calcul ou un groupement est convertie en analyse d’événements ;
+- pour un classement compté dont le groupement manque, la source de catalogue ou l’unique dimension explicite fournit la dimension à classer.
+
+Ces règles ne reconnaissent aucune phrase particulière. Elles réparent des équivalences et invariants du plan sémantique avant le compilateur SQL. La suite backend comporte maintenant 52 tests réussis, dont un test qui reproduit un classement d’actions sans groupement et un tri fourni sous forme d’objet.
+
+Un format de plan très compact a été expérimenté pour réduire la latence. Huit questions étaient prévues ; le lot a été interrompu après cinq résultats, car la précision diminuait :
+
+1. action la plus fréquente : plan correct, 61,4 secondes ;
+2. compte le plus actif sur dix jours : classement correct mais période absente, 28,0 secondes ;
+3. compte le moins actif sur dix jours : groupement, ordre et période perdus, 36,2 secondes ;
+4. liste des tables auditées : source events au lieu de objects, 12,7 secondes ;
+5. dernière personne ayant agi : comptage et filtre temporel inventés, 30,2 secondes.
+
+Cette représentation compacte a été entièrement retirée. Un schéma JSON contraint natif de llama.cpp a également été essayé. Il n’a pas terminé avant 180 secondes dans cette configuration et a été retiré. Le contrat JSON riche reste retenu afin de privilégier la compréhension.
+
+Avec Oracle actif et le prompt riche, plusieurs appels ont atteint le délai de 180 secondes. Un appel mis en cache a terminé en 140,22 secondes, mais son classement incomplet a déclenché une clarification avant la réparation générique du groupement. Les derniers appels ont de nouveau atteint le délai avant de retourner un plan. Aucun SQL n’a été envoyé à Oracle pendant ces timeouts. Le 7B se charge donc correctement, mais le profil quality n’est pas fluide ni suffisamment stable sur cette machine de 8 Go pour obtenir aujourd’hui une mesure de précision de bout en bout.
+
+### Statut scientifique
+
+Le corpus query_plan_holdout_v4.json reste figé avec ses 50 questions. Il n’a pas été modifié et son premier passage 7B n’a pas été lancé : avec la latence et les timeouts observés, l’exécution durerait plusieurs heures et mesurerait surtout la contrainte matérielle. Aucun score 7B ne doit être annoncé avant cette première exécution complète.
+
+La seule mesure de généralisation officielle demeure 89,1 % au premier passage aveugle v3. Les 52 tests unitaires mesurent la cohérence du code et la non-régression ; ils ne signifient pas 100 % de compréhension des questions futures.
+
+### État de reprise
+
+Le profil 7B est techniquement installé et sélectionnable, et le 1,5B reste le mode pratique sur la machine actuelle. Ils ne doivent jamais être lancés simultanément. Pour une reprise sur ce PC, lancer start-local.ps1 -ModelProfile quality pour évaluer la qualité en acceptant une latence élevée, ou start-local.ps1 -ModelProfile light pour tester rapidement l’interface. Après ajout réel de RAM physique ou sur une machine CPU plus récente, exécuter d’abord le corpus v4 sans le modifier, conserver son résultat initial, puis lancer scripts/test-local.ps1. Les défauts révélés devront être corrigés au niveau du contrat ou des invariants généraux, jamais par une liste de questions complètes.
+
+Validation finale du lot : 52 tests unittest réussis, compilation Python réussie, contrôle TypeScript explicite réussi et build de production Next.js 16.3.4 réussi avec sept pages statiques. Le test local complet du profil quality n’est pas marqué réussi : les appels 7B avec Oracle ont atteint le délai avant exécution SQL, comme documenté ci-dessus.

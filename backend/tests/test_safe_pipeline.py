@@ -480,6 +480,22 @@ class GeneralQueryPlanTests(unittest.TestCase):
         )
         self.assertEqual(plan["status"], "clarification")
 
+    def test_analytical_catalog_source_is_normalized_to_events(self) -> None:
+        plan = normalize_query_plan(
+            "quelle action est la plus fréquente",
+            {
+                "status": "query", "source": "actions",
+                "calculation": {"operation": "count", "field": "event"},
+                "order_by": {"field": "event_count", "direction": "desc"},
+                "limit": 1, "response_mode": "ranking",
+            },
+            USERS, OBJECTS,
+        )
+        self.assertEqual(plan["status"], "query")
+        self.assertEqual(plan["source"], "events")
+        self.assertEqual(plan["group_by"], ["action"])
+        self.assertEqual(plan["order_by"], [{"field": "event_count", "direction": "desc"}])
+
     def test_incomplete_comparison_requests_clarification(self) -> None:
         plan = normalize_query_plan(
             "compare les périodes",

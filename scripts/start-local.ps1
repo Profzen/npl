@@ -62,6 +62,7 @@ if ($ModelProfile -eq "auto") {
 }
 $model = if ($selectedProfile -eq "quality") { $qualityModel } else { $lightModel }
 $env:AUDITAI_MODEL_PROFILE = $selectedProfile
+$env:AUDITAI_MODEL_TIMEOUT_SECONDS = if ($selectedProfile -eq "quality") { "240" } else { "120" }
 
 if (-not (Test-LocalPort 1521)) {
     $keeper = Start-Process -WindowStyle Hidden -PassThru -FilePath "wsl.exe" -ArgumentList "-d", "OracleLinux_9_5", "--", "sleep", "infinity"
