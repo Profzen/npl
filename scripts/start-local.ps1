@@ -1,6 +1,6 @@
-﻿param(
+param(
     [switch]$SkipFrontend,
-    [ValidateSet("auto", "quality", "light")]
+    [ValidateSet("auto", "quality", "light", "qwen3", "gemma3")]
     [string]$ModelProfile = "auto"
 )
 
@@ -55,14 +55,27 @@ $env:AUDITAI_MODEL_HEALTH_URL = "http://127.0.0.1:8080/health"
 
 $qualityModel = Join-Path $projectRoot "models\qwen2.5-coder-7b\qwen2.5-coder-7b-instruct-q4_k_m.gguf"
 $lightModel = Join-Path $projectRoot "models\qwen2.5-coder-1.5b\qwen2.5-coder-1.5b-instruct-q4_k_m.gguf"
+$qwen3Model = Join-Path $projectRoot "models\qwen3-4b\qwen3-4b-q4_k_m.gguf"
+$gemma3Model = Join-Path $projectRoot "models\gemma3-4b\gemma-3-4b-it-q4_k_m.gguf"
 if ($ModelProfile -eq "auto") {
-    $selectedProfile = if (Test-Path -LiteralPath $qualityModel) { "quality" } else { "light" }
+    $selectedProfile = if (Test-Path -LiteralPath $qwen3Model) { "qwen3" } elseif (Test-Path -LiteralPath $qualityModel) { "quality" } else { "light" }
 } else {
     $selectedProfile = $ModelProfile
 }
-$model = if ($selectedProfile -eq "quality") { $qualityModel } else { $lightModel }
+$model = switch ($selectedProfile) {
+    "quality" { $qualityModel }
+    "qwen3" { $qwen3Model }
+    "gemma3" { $gemma3Model }
+    default { $lightModel }
+}
+$modelLabel = switch ($selectedProfile) {
+    "quality" { "Qwen2.5-Coder 7B Q4" }
+    "qwen3" { "Qwen3 4B Q4" }
+    "gemma3" { "Gemma 3 4B IT Q4" }
+    default { "Qwen2.5-Coder 1.5B Q4" }
+}
 $env:AUDITAI_MODEL_PROFILE = $selectedProfile
-$env:AUDITAI_MODEL_TIMEOUT_SECONDS = if ($selectedProfile -eq "quality") { "240" } else { "120" }
+$env:AUDITAI_MODEL_TIMEOUT_SECONDS = if ($selectedProfile -eq "light") { "120" } else { "240" }
 
 if (-not (Test-LocalPort 1521)) {
     $keeper = Start-Process -WindowStyle Hidden -PassThru -FilePath "wsl.exe" -ArgumentList "-d", "OracleLinux_9_5", "--", "sleep", "infinity"
@@ -82,15 +95,15 @@ if ($oracleHealth -ne "healthy") { throw "Oracle n'a pas atteint l'état healthy
 if (-not (Test-LocalPort 8080)) {
     $llamaServer = Join-Path $projectRoot "tools\llama.cpp\llama-server.exe"
     if (-not (Test-Path -LiteralPath $llamaServer)) { throw "llama-server.exe absent dans tools/llama.cpp." }
-    if (-not (Test-Path -LiteralPath $model)) { throw "Modèle Qwen absent pour le profil $selectedProfile : $model" }
+    if (-not (Test-Path -LiteralPath $model)) { throw "Modèle absent pour le profil $selectedProfile : $model" }
     $threads = if ($selectedProfile -eq "quality") { "4" } else { "4" }
-    $process = Start-Process -WindowStyle Hidden -PassThru -FilePath $llamaServer -WorkingDirectory (Split-Path $llamaServer) -ArgumentList "-m", $model, "--host", "127.0.0.1", "--port", "8080", "-c", "2048", "-t", $threads, "-np", "1" -RedirectStandardOutput (Join-Path $logsDir "llama.out.log") -RedirectStandardError (Join-Path $logsDir "llama.err.log")
+    $process = Start-Process -WindowStyle Hidden -PassThru -FilePath $llamaServer -WorkingDirectory (Split-Path $llamaServer) -ArgumentList "-m", $model, "--host", "127.0.0.1", "--port", "8080", "-c", "2048", "-t", $threads, "-np", "1", "--jinja" -RedirectStandardOutput (Join-Path $logsDir "llama.out.log") -RedirectStandardError (Join-Path $logsDir "llama.err.log")
     Set-Content -LiteralPath (Join-Path $runtimeDir "llama.pid") -Value $process.Id -Encoding ascii
     Set-Content -LiteralPath (Join-Path $runtimeDir "model-profile.txt") -Value $selectedProfile -Encoding ascii
 } elseif (Test-Path -LiteralPath (Join-Path $runtimeDir "model-profile.txt")) {
     $runningProfile = (Get-Content -LiteralPath (Join-Path $runtimeDir "model-profile.txt") -Raw).Trim()
     if ($ModelProfile -ne "auto" -and $runningProfile -ne $selectedProfile) {
-        throw "Le profil Qwen $runningProfile est déjà lancé. Exécutez stop-local.ps1 puis relancez avec -ModelProfile $selectedProfile."
+        throw "Le profil $runningProfile est déjà lancé. Exécutez stop-local.ps1 puis relancez avec -ModelProfile $selectedProfile."
     }
 }
 Wait-LocalPort 8080 180
@@ -112,7 +125,7 @@ if (-not $SkipFrontend) { Wait-LocalPort 3000 90 }
 Write-Host "AuditAI est prêt."
 if (-not $SkipFrontend) { Write-Host "Interface : http://127.0.0.1:3000" }
 Write-Host "API       : http://127.0.0.1:8000"
-Write-Host "Modèle    : Qwen2.5-Coder ($selectedProfile)"
+Write-Host "Modèle    : $modelLabel ($selectedProfile)"
 Write-Host "Utilisateur initial : admin"
 Write-Host "Le mot de passe local est conservé dans infra/oracle/.env (non versionné)."
 

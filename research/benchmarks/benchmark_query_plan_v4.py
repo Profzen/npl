@@ -10,7 +10,8 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "backend"))
 
-from app.services.local_model_service import interpret_question
+from app.services.local_model_service import propose_question_plan
+from app.services.query_plan_service import normalize_query_plan
 from app.services.safe_sql_builder import build_safe_audit_query
 from app.services.oracle_service import execute_sql, fetch_intent_catalog
 
@@ -46,7 +47,16 @@ def main() -> None:
 
     for index, case in enumerate(cases, 1):
         started = time.perf_counter()
-        intent, warning = interpret_question(case["question"], known_users, known_objects)
+        raw_intent, warning = propose_question_plan(
+            case["question"], known_users, known_objects
+        )
+        intent = normalize_query_plan(
+            case["question"], raw_intent, known_users, known_objects
+        )
+        raw_checks = {
+            key: is_subset(value, raw_intent.get(key))
+            for key, value in case["expected"].items()
+        }
         checks = {
             key: is_subset(value, intent.get(key))
             for key, value in case["expected"].items()
@@ -70,6 +80,11 @@ def main() -> None:
             "category": case["category"],
             "question": case["question"],
             "expected": case["expected"],
+            "raw_intent": raw_intent,
+            "raw_checks": raw_checks,
+            "raw_score": round(
+                sum(raw_checks.values()) / max(1, len(raw_checks)), 3
+            ),
             "intent": intent,
             "checks": checks,
             "score": round(score, 3),
@@ -88,12 +103,17 @@ def main() -> None:
         )
 
     scored = [item["score"] for item in results]
+    raw_scored = [item["raw_score"] for item in results]
     query_attempts = [item for item in results if item["intent"].get("status") == "query"]
     summary = {
         "model_profile": os.getenv("AUDITAI_MODEL_PROFILE", "unknown"),
-        "architecture": "Qwen semantic plan + validated deterministic Oracle SELECT compiler",
+        "architecture": "local semantic model + validated deterministic Oracle SELECT compiler",
         "frozen_before_evaluation": True,
         "cases": len(results),
+        "mean_raw_model_score": round(
+            sum(raw_scored) / max(1, len(raw_scored)), 3
+        ),
+        "exact_raw_model_matches": sum(score == 1 for score in raw_scored),
         "mean_semantic_score": round(sum(scored) / max(1, len(scored)), 3),
         "exact_plan_matches": sum(score == 1 for score in scored),
         "status_accuracy": round(sum(item["checks"].get("status", False) for item in results) / max(1, len(results)), 3),

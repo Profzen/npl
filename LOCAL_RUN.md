@@ -5,7 +5,9 @@
 - Windows avec PowerShell, WSL2 Oracle Linux et Docker déjà configurés ;
 - conteneur `auditai-oracle` créé ;
 - profil léger : Qwen2.5-Coder-1.5B Q4 dans models/qwen2.5-coder-1.5b/ ;
-- profil qualité : Qwen2.5-Coder-7B Q4 dans models/qwen2.5-coder-7b/ ;
+- profil qualité historique : Qwen2.5-Coder-7B Q4 dans models/qwen2.5-coder-7b/ ;
+- profil de comparaison Qwen3 : Qwen3-4B Q4 dans models/qwen3-4b/ ;
+- profil de comparaison Gemma : Gemma 3 4B IT Q4 dans models/gemma3-4b/ ;
 - dépendances Python de `backend/requirements.txt` et dépendances npm installées.
 
 ## Démarrer
@@ -18,12 +20,25 @@ powershell -ExecutionPolicy Bypass -File .\scripts\start-local.ps1
 
 Le script démarre Oracle, Qwen via llama.cpp, FastAPI et Next.js sur les interfaces de boucle locale. Les secrets restent dans infra/oracle/.env, ignoré par Git. Il crée un mot de passe administrateur local si nécessaire sans l'afficher.
 
-Le profil auto est utilisé par défaut : il choisit le 7B si son fichier complet est présent, sinon le 1.5B. Pour choisir explicitement :
+Le profil auto est utilisé par défaut : il choisit Qwen3-4B lorsque son fichier complet est présent, sinon le 7B historique, puis le 1.5B. Pour choisir explicitement :
 
     powershell -ExecutionPolicy Bypass -File .\scripts\start-local.ps1 -ModelProfile quality
     powershell -ExecutionPolicy Bypass -File .\scripts\start-local.ps1 -ModelProfile light
+    powershell -ExecutionPolicy Bypass -File .\scripts\start-local.ps1 -ModelProfile qwen3
+    powershell -ExecutionPolicy Bypass -File .\scripts\start-local.ps1 -ModelProfile gemma3
 
 Le profil qualité est destiné aux tests de compréhension et à l'usage final. Le profil léger permet de développer lorsque la mémoire est limitée. Un seul profil et un seul processus llama-server sont chargés à la fois ; l'autre modèle reste uniquement sur le disque. Il faut arrêter le profil courant avant d'en sélectionner un autre. Une machine disposant de 16 Go de RAM physique est recommandée pour faire cohabiter plus confortablement le 7B, Oracle, FastAPI et Next.js ; le swap évite certains échecs mémoire mais ne donne pas la fluidité de la RAM physique.
+
+Les deux modèles 4B de comparaison se téléchargent séparément avec contrôle de taille et SHA-256 :
+
+    python .\scripts\download-comparison-model.py qwen3
+    python .\scripts\download-comparison-model.py gemma3
+
+Après validation des deux fichiers, la présélection reproductible sur treize cas du corpus v4 se lance avec :
+
+    powershell -ExecutionPolicy Bypass -File .\scripts\run-model-comparison.ps1
+
+L’option -Full exécute les cinquante cas. Le benchmark conserve séparément le score brut du modèle et le score du plan final après validation.
 
 Si le 7B manque, son téléchargement officiel, reprenable et contrôlé par SHA-256 se lance avec :
 

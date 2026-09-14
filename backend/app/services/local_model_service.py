@@ -15,6 +15,7 @@ MODEL_URL = os.getenv("AUDITAI_MODEL_URL", "http://127.0.0.1:8080/v1/chat/comple
 MODEL_HEALTH_URL = os.getenv("AUDITAI_MODEL_HEALTH_URL", "http://127.0.0.1:8080/health")
 MODEL_TIMEOUT_SECONDS = int(os.getenv("AUDITAI_MODEL_TIMEOUT_SECONDS", "120"))
 MODEL_REVIEW_ENABLED = os.getenv("AUDITAI_MODEL_REVIEW_ENABLED", "false").lower() == "true"
+MODEL_PROFILE = os.getenv("AUDITAI_MODEL_PROFILE", "light").lower()
 
 _INTENT_PROMPT = """Tu es le moteur sémantique d’AuditAI. Tu aides des personnes non informaticiennes à consulter un journal d’audit Oracle en français, même avec des fautes, des synonymes ou une formulation inhabituelle.
 Tu comprends le besoin métier, mais tu ne produis jamais de SQL. Tu réponds uniquement par un objet JSON valide suivant ce contrat :
@@ -99,14 +100,23 @@ def _strip_fences(content: str) -> str:
 
 
 def _chat(system_prompt: str, user_content: str, *, max_tokens: int, json_mode: bool = False) -> str:
+    effective_user_content = (
+        user_content + "\n/no_think" if MODEL_PROFILE == "qwen3" else user_content
+    )
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": effective_user_content},
+    ]
+    if MODEL_PROFILE == "gemma3":
+        messages = [{
+            "role": "user",
+            "content": system_prompt + "\n\n" + effective_user_content,
+        }]
     payload: dict[str, Any] = {
         "model": "local-model",
         "temperature": 0,
         "max_tokens": max_tokens,
-        "messages": [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_content},
-        ],
+        "messages": messages,
     }
     if json_mode:
         payload["response_format"] = {"type": "json_object"}
@@ -134,7 +144,7 @@ def local_model_status() -> tuple[str, str | None]:
         return "error", str(exc)
 
 
-def interpret_question(
+def propose_question_plan(
     question: str,
     known_users: Iterable[str],
     known_objects: Iterable[str],
@@ -167,7 +177,21 @@ def interpret_question(
             model_error = "L'intention du modèle n'est pas un objet JSON"
     except Exception as exc:
         model_error = str(exc)
-    return normalize_query_plan(question, raw_intent, known_users, known_objects), model_error
+    return raw_intent, model_error
+
+
+def interpret_question(
+    question: str,
+    known_users: Iterable[str],
+    known_objects: Iterable[str],
+) -> tuple[dict[str, Any], str | None]:
+    raw_intent, model_error = propose_question_plan(
+        question, known_users, known_objects
+    )
+    return (
+        normalize_query_plan(question, raw_intent, known_users, known_objects),
+        model_error,
+    )
 
 
 def _is_latest_user_question(question: str, intent: Mapping[str, Any] | None = None) -> bool:
