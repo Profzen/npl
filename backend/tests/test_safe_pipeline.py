@@ -641,6 +641,107 @@ class GeneralQueryPlanTests(unittest.TestCase):
         )
         self.assertIn("le moins actif", answer)
 
+    def test_semantic_cues_repair_general_least_user_plan(self) -> None:
+        plan = normalize_query_plan(
+            "qui sont les deux utilisateur a avoir effectue le moin d'actions ?",
+            {
+                "status": "query", "source": "events", "dimensions": ["user"],
+                "filters": [{"field": "action", "operator": "ne", "value": ["SELECT"]}],
+                "order_by": [{"field": "timestamp", "direction": "desc"}],
+                "limit": 2, "response_mode": "detail",
+            },
+            USERS, OBJECTS,
+        )
+        self.assertEqual(plan["calculation"], {"operation": "count", "field": "event"})
+        self.assertEqual(plan["group_by"], ["user"])
+        self.assertEqual(plan["order_by"], [{"field": "event_count", "direction": "asc"}])
+        self.assertEqual(plan["limit"], 2)
+        self.assertEqual(plan["filters"], [])
+
+    def test_semantic_cues_repair_general_recent_action_plan(self) -> None:
+        plan = normalize_query_plan(
+            "donne moi les 6 derniers actions dans la base et le utilisateur qui l'on fait",
+            {
+                "status": "query", "source": "events", "dimensions": ["user", "action"],
+                "order_by": [{"field": "action", "direction": "desc"}],
+                "limit": 6, "response_mode": "detail",
+            },
+            USERS, OBJECTS,
+        )
+        self.assertEqual(plan["order_by"], [{"field": "timestamp", "direction": "desc"}])
+        self.assertEqual(plan["limit"], 6)
+        self.assertEqual(plan["dimensions"], ["user", "action"])
+
+    def test_catalog_sql_reports_total_before_limit(self) -> None:
+        query = build_safe_audit_query(self._plan(
+            source="objects", dimensions=["object"], response_mode="list", limit=10,
+        ))
+        self.assertIn("COUNT(*) OVER () AS AUDITAI_TOTAL_AVAILABLE", query.sql)
+        self.assertIn("FETCH FIRST 10 ROWS ONLY", query.sql)
+
+    def test_ranking_sql_counts_ties_before_limit(self) -> None:
+        query = build_safe_audit_query(self._plan(
+            dimensions=["user"],
+            calculation={"operation": "count", "field": "event"},
+            group_by=["user"],
+            order_by=[{"field": "event_count", "direction": "asc"}],
+            limit=2, response_mode="ranking",
+        ))
+        self.assertIn("COUNT(*) OVER (PARTITION BY EVENT_COUNT) AS AUDITAI_TIE_COUNT", query.sql)
+        self.assertIn("ORDER BY EVENT_COUNT ASC, DBUSERNAME ASC", query.sql)
+        self.assertIn("FETCH FIRST 2 ROWS ONLY", query.sql)
+
+    def test_catalog_synthesis_explains_display_limit(self) -> None:
+        rows = [{"OBJECT_NAME": f"OBJ_{index}"} for index in range(1, 11)]
+        answer = build_local_synthesis(
+            "liste les tables", rows, None,
+            self._plan(source="objects", dimensions=["object"], response_mode="list"),
+            total_available=15,
+        )
+        self.assertIn("10", answer)
+        self.assertIn("15", answer)
+
+    def test_least_ranking_synthesis_explains_ties(self) -> None:
+        rows = [
+            {"DBUSERNAME": "A", "EVENT_COUNT": 357, "AUDITAI_TIE_COUNT": 11},
+            {"DBUSERNAME": "B", "EVENT_COUNT": 357, "AUDITAI_TIE_COUNT": 11},
+        ]
+        answer = build_local_synthesis(
+            "les deux utilisateurs avec le moins d'actions", rows, None,
+            self._plan(
+                dimensions=["user"],
+                calculation={"operation": "count", "field": "event"},
+                group_by=["user"],
+                order_by=[{"field": "event_count", "direction": "asc"}],
+                limit=2, response_mode="ranking",
+            ),
+        )
+        self.assertIn("11", answer)
+        self.assertIn("minimum", answer)
+        self.assertIn("A", answer)
+        self.assertIn("B", answer)
+
+    def test_six_row_synthesis_preserves_every_tuple_without_model_call(self) -> None:
+        rows = [
+            {"DBUSERNAME": f"USER_{index}", "ACTION_NAME": "SELECT",
+             "EVENT_TIMESTAMP": f"2026-09-14T10:0{index}:00"}
+            for index in range(6)
+        ]
+        with patch("app.services.local_model_service._chat") as chat:
+            answer = build_local_synthesis(
+                "les 6 dernieres actions, la date et l'utilisateur", rows, None,
+                self._plan(
+                    dimensions=["user", "action", "timestamp"],
+                    order_by=[{"field": "timestamp", "direction": "desc"}],
+                    limit=6,
+                ),
+            )
+        chat.assert_not_called()
+        for index, row in enumerate(rows, 1):
+            self.assertIn(f"{index}.", answer)
+            self.assertIn(row["DBUSERNAME"], answer)
+            self.assertIn(row["EVENT_TIMESTAMP"], answer)
+
 
 if __name__ == "__main__":
     unittest.main()

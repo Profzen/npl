@@ -173,6 +173,9 @@ def interpret_question(
 def _is_latest_user_question(question: str, intent: Mapping[str, Any] | None = None) -> bool:
     if intent and intent.get("aggregate") == "latest_users":
         return True
+    dimensions = list((intent or {}).get("dimensions") or [])
+    if "action" in dimensions:
+        return False
     normalized = unicodedata.normalize("NFKD", question)
     normalized = "".join(char for char in normalized if not unicodedata.combining(char)).upper()
     return bool(
@@ -181,11 +184,98 @@ def _is_latest_user_question(question: str, intent: Mapping[str, Any] | None = N
     )
 
 
+
+def _event_description(raw_row: Mapping[str, Any]) -> str:
+    row = {str(key).upper(): value for key, value in raw_row.items() if value is not None}
+    action = _ACTION_FR.get(
+        str(row.get("ACTION_NAME") or "").upper(),
+        str(row.get("ACTION_NAME") or "activité"),
+    )
+    actor = str(row.get("DBUSERNAME") or "")
+    if actor and row.get("ACTION_NAME"):
+        detail = f"{actor} a effectué l’opération « {action} »"
+    elif actor:
+        detail = f"Utilisateur : {actor}"
+    elif row.get("ACTION_NAME"):
+        detail = f"Action : {action}"
+    else:
+        detail = "Événement d’audit"
+    if row.get("OBJECT_NAME"):
+        detail += f" sur {row['OBJECT_NAME']}"
+    if row.get("EVENT_TIMESTAMP"):
+        detail += f", le {_json_default(row['EVENT_TIMESTAMP'])}"
+    if row.get("USERHOST"):
+        detail += f", depuis {row['USERHOST']}"
+    if row.get("RETURNCODE") not in (None, 0, "0"):
+        detail += f", avec le code d’échec {row['RETURNCODE']}"
+    return detail
+
+
+def _ranking_synthesis(
+    rows: list[dict[str, Any]],
+    intent: Mapping[str, Any] | None,
+) -> str | None:
+    normalized = [
+        {str(key).upper(): value for key, value in row.items() if value is not None}
+        for row in rows
+    ]
+    if not normalized or not all("EVENT_COUNT" in row for row in normalized):
+        return None
+    label_key = next(
+        (key for key in ("DBUSERNAME", "OBJECT_NAME", "ACTION_NAME", "USERHOST", "EVENT_DAY")
+         if any(row.get(key) for row in normalized)),
+        None,
+    )
+    if not label_key:
+        return None
+    labels = {
+        "DBUSERNAME": ("utilisateur", "utilisateurs"),
+        "OBJECT_NAME": ("objet", "objets"),
+        "ACTION_NAME": ("action", "actions"),
+        "USERHOST": ("poste", "postes"),
+        "EVENT_DAY": ("jour", "jours"),
+    }
+    singular_label, plural_label = labels[label_key]
+    order = (intent or {}).get("order_by") or []
+    ascending = bool(
+        order and isinstance(order[0], Mapping) and order[0].get("direction") == "asc"
+    )
+    names = [str(row.get(label_key) or "-") for row in normalized]
+    counts = [row["EVENT_COUNT"] for row in normalized]
+    tie_count = max(int(row.get("AUDITAI_TIE_COUNT") or 1) for row in normalized)
+    same_count = len(set(counts)) == 1
+    qualifier = "les moins actifs" if ascending else "les plus actifs"
+
+    if len(normalized) == 1:
+        if label_key == "ACTION_NAME":
+            frequency = "la moins fréquente" if ascending else "la plus fréquente"
+            return f"L’action {frequency} est {names[0]}, avec {counts[0]} événement(s)."
+        return (
+            f"Le {singular_label} {'le moins actif' if ascending else 'le plus actif'} "
+            f"est {names[0]}, avec {counts[0]} événement(s)."
+        )
+    if same_count and tie_count > len(normalized):
+        return (
+            f"{tie_count} {plural_label} sont ex æquo au {'minimum' if ascending else 'maximum'} "
+            f"avec {counts[0]} événement(s). Les {len(normalized)} affichés sont : "
+            f"{', '.join(names)}."
+        )
+    if same_count and tie_count == len(normalized):
+        return (
+            f"Les {len(normalized)} {plural_label} {qualifier} sont ex æquo avec "
+            f"{counts[0]} événement(s) : {', '.join(names)}."
+        )
+    ranking = ", ".join(
+        f"{row.get(label_key, '-')} ({row['EVENT_COUNT']})" for row in normalized
+    )
+    return f"Classement des {plural_label} par nombre d’événements : {ranking}."
+
 def _rule_synthesis(
     rows: list[dict[str, Any]],
     error: str | None = None,
     question: str = "",
     intent: Mapping[str, Any] | None = None,
+    total_available: int | None = None,
 ) -> str:
     if error:
         return "La recherche n'a pas abouti. Vérifiez la connexion locale puis reformulez la demande."
@@ -201,7 +291,14 @@ def _rule_synthesis(
         labels = {"users": "utilisateurs", "objects": "tables ou objets audités", "actions": "actions auditées"}
         if not values:
             return f"Aucun élément n’a été trouvé dans la liste des {labels[source]}."
-        return f"Voici les {labels[source]} : " + ", ".join(values) + "."
+        prefix = f"Voici les {labels[source]} : " + ", ".join(values) + "."
+        if total_available is not None and total_available > len(values):
+            prefix += f" {len(values)} résultats sont affichés sur {total_available}."
+        return prefix
+
+    ranking_answer = _ranking_synthesis(rows, intent)
+    if ranking_answer:
+        return ranking_answer
 
     if len(rows) == 1:
         row = {str(key).upper(): value for key, value in rows[0].items() if value is not None}
@@ -262,47 +359,34 @@ def _rule_synthesis(
         if _is_latest_user_question(question, intent) and row.get("DBUSERNAME"):
             return f"Le dernier utilisateur correspondant est {row['DBUSERNAME']}. {detail}."
         return f"Un événement correspond à la demande. {detail}."
-    if len(rows) <= 3:
-        descriptions: list[str] = []
-        for raw_row in rows:
-            row = {str(key).upper(): value for key, value in raw_row.items() if value is not None}
-            if "EVENT_COUNT" in row:
-                if row.get("OBJECT_NAME"):
-                    descriptions.append(f"{row['OBJECT_NAME']} totalise {row['EVENT_COUNT']} événement(s)")
-                elif row.get("ACTION_NAME"):
-                    descriptions.append(f"{row['ACTION_NAME']} totalise {row['EVENT_COUNT']} événement(s)")
-                elif row.get("DBUSERNAME"):
-                    descriptions.append(f"{row['DBUSERNAME']} totalise {row['EVENT_COUNT']} événement(s)")
-                elif row.get("USERHOST"):
-                    descriptions.append(f"{row['USERHOST']} totalise {row['EVENT_COUNT']} événement(s)")
-                else:
-                    descriptions.append(f"{row['EVENT_COUNT']} événement(s)")
-                continue
-
-            action = _ACTION_FR.get(
-                str(row.get("ACTION_NAME") or "").upper(),
-                str(row.get("ACTION_NAME") or "activité"),
-            )
-            actor = (
-                f"L'utilisateur {row['DBUSERNAME']}"
-                if row.get("DBUSERNAME")
-                else "Un utilisateur"
-            )
-            detail = f"{actor} a réalisé l'opération « {action} »"
-            if row.get("OBJECT_NAME"):
-                detail += f" sur {row['OBJECT_NAME']}"
-            if row.get("EVENT_TIMESTAMP"):
-                detail += f" le {_json_default(row['EVENT_TIMESTAMP'])}"
-            if row.get("USERHOST"):
-                detail += f" depuis {row['USERHOST']}"
-            if row.get("RETURNCODE") not in (None, 0, "0"):
-                detail += f", avec le code d'échec {row['RETURNCODE']}"
-            descriptions.append(detail)
-
-        count_label = "Deux" if len(rows) == 2 else "Trois"
+    if len(rows) <= 10:
+        descriptions = [
+            f"{index}. {_event_description(raw_row)}."
+            for index, raw_row in enumerate(rows, 1)
+        ]
+        number_word = {
+            2: "Deux", 3: "Trois", 4: "Quatre", 5: "Cinq", 6: "Six",
+            7: "Sept", 8: "Huit", 9: "Neuf", 10: "Dix",
+        }.get(len(rows), str(len(rows)))
+        intro = (
+            f"{number_word} événements correspondent à la demande, "
+            "dans l’ordre du tableau."
+        )
         if _is_latest_user_question(question, intent):
-            return f"Voici les {count_label.lower()} derniers utilisateurs concernés. " + ". ".join(descriptions) + "."
-        return f"{count_label} événements correspondent à la demande. " + ". ".join(descriptions) + "."
+            number_word_lower = {
+                2: "deux", 3: "trois", 4: "quatre", 5: "cinq", 6: "six",
+                7: "sept", 8: "huit", 9: "neuf", 10: "dix",
+            }.get(len(rows), str(len(rows)))
+            intro = (
+                f"Voici les {number_word_lower} derniers utilisateurs, "
+                "dans l’ordre du tableau."
+            )
+        actors = list(dict.fromkeys(
+            str(row.get("DBUSERNAME"))
+            for row in rows if row.get("DBUSERNAME") not in (None, "")
+        ))
+        actor_summary = f" Utilisateurs concernés : {', '.join(actors)}." if len(actors) > 1 else ""
+        return intro + actor_summary + " " + " ".join(descriptions)
     normalized_rows = [
         {str(key).upper(): value for key, value in raw_row.items() if value is not None}
         for raw_row in rows
@@ -356,16 +440,17 @@ def build_local_synthesis(
     rows: list[dict[str, Any]],
     error: str | None,
     intent: Mapping[str, Any] | None = None,
+    total_available: int | None = None,
 ) -> str:
     deterministic_modes = {"ranking", "count", "comparison"}
     if (
         error
         or not rows
-        or len(rows) <= 3
+        or len(rows) <= 10
         or str((intent or {}).get("source") or "") in {"users", "objects", "actions"}
         or str((intent or {}).get("response_mode") or "") in deterministic_modes
     ):
-        return _rule_synthesis(rows, error, question, intent)
+        return _rule_synthesis(rows, error, question, intent, total_available)
     compact_rows = rows[:25]
     user_content = (
         f"Question: {question}\n"
@@ -377,7 +462,7 @@ def build_local_synthesis(
         answer = _chat(_SYNTHESIS_PROMPT, user_content[:5000], max_tokens=180)
         if _generated_synthesis_is_acceptable(answer):
             return answer
-        return _rule_synthesis(rows, error, question, intent)
+        return _rule_synthesis(rows, error, question, intent, total_available)
     except Exception:
-        return _rule_synthesis(rows, error, question, intent)
+        return _rule_synthesis(rows, error, question, intent, total_available)
 

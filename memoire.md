@@ -1292,3 +1292,66 @@ Six entrées de l’historique ont été comparées à leur SQL, leurs lignes Or
 Bilan : deux requêtes sont correctement construites, trois sont sémantiquement fausses et une liste est correcte mais incomplète à cause du plafond. Une seule des synthèses longues respecte complètement son tableau ; la dernière synthèse démontre que le validateur actuel vérifie surtout la présence de valeurs autorisées, mais pas encore la correspondance ligne par ligne, l’ordre et l’exhaustivité.
 
 Les causes sont distinctes. Qwen 1,5B peut omettre le calcul de classement ou confondre ordre lexical et ordre temporel. Le validateur accepte encore certains plans autorisés mais infidèles à la question. Pour les longues sorties, la génération libre peut réordonner, répéter ou recombiner les valeurs Oracle. La correction future doit porter sur des invariants généraux : un classement plus/moins exige calcul, groupement et ordre sur la métrique ; une demande de récence exige un ordre temporel ; une synthèse détaillée doit préserver chaque tuple et son ordre ; une liste plafonnée doit annoncer qu’elle est partielle. Il ne faut pas ajouter les six phrases complètes comme cas particuliers.
+
+## 30. Correction générale des classements, de la récence et de la fidélité des réponses — 14 septembre 2026
+
+### Objectif et principe retenu
+
+Ce lot corrige les défauts observés dans les six questions de la section 29 sans inscrire ces questions complètes dans le code. Qwen reste le moteur de compréhension du langage naturel. Une couche de cohérence sémantique contrôle ensuite des concepts généraux : dimension demandée, classement minimum ou maximum, récence, quantité, filtre d’action et mode de réponse. Le compilateur produit enfin un SELECT Oracle sûr. Cette répartition conserve la capacité d’interpréter de nouvelles formulations tout en empêchant un plan plausible mais contradictoire d’être exécuté silencieusement.
+
+### Invariants sémantiques ajoutés
+
+Le validateur reconnaît désormais les opérateurs de sens suivants :
+
+- un classement exprimé par « plus », « moins », « minimum », « maximum », « plus actif » ou une formulation équivalente exige un comptage des événements, un groupement par la dimension demandée et un tri du nombre dans le bon sens ;
+- une demande de récence portant sur des actions, opérations, événements, utilisateurs ou objets dans le contexte de la base exige un tri par EVENT_TIMESTAMP décroissant ;
+- les quantités numériques ou écrites en lettres de un à vingt alimentent la limite demandée ;
+- un filtre d’action proposé par le modèle est retiré si la question ne mentionne aucune action précise ;
+- une formulation trop vague comme « quelle est la dernière personne » conserve la demande de clarification, tandis que « dernière personne à effectuer une action en base » contient assez de contexte pour être analysée.
+
+Ces règles portent sur une ontologie et des opérateurs. Elles réparent donc une famille de plans erronés provenant du 1,5B au lieu de mémoriser les phrases utilisées pendant le test.
+
+### SQL, limites et égalités
+
+Les catalogues distincts calculent maintenant AUDITAI_TOTAL_AVAILABLE avant FETCH FIRST. Le paramètre « Résultats maximum » continue de limiter les lignes envoyées à l’interface, mais l’API expose séparément total_available et truncated. Ainsi, une limite de 10 sur 15 objets produit dix lignes et une synthèse indiquant explicitement « 10 résultats sont affichés sur 15 ». La liste concerne les objets présents dans SMART2DSECU.UNIFIED_AUDIT_DATA ; elle ne prétend pas être le dictionnaire complet des tables Oracle.
+
+Les classements par nombre utilisent une sous-requête groupée puis calculent AUDITAI_TIE_COUNT avant la limite. Un tri secondaire stable par nom rend l’ordre reproductible. Quand davantage d’entités sont ex aequo que la limite d’affichage, la synthèse annonce le nombre total d’ex aequo et précise quels éléments sont affichés. Les colonnes AUDITAI_TOTAL_AVAILABLE et AUDITAI_TIE_COUNT servent seulement à la vérification interne et sont retirées des lignes présentées dans le tableau.
+
+### Synthèse fidèle aux données Oracle
+
+Pour un à dix résultats détaillés, la réponse est maintenant construite directement à partir de chaque ligne exécutée. Elle conserve l’ordre et le tuple utilisateur, action, objet, date, poste et code retour. Qwen ne peut donc plus réordonner, dupliquer, omettre ou recombiner les valeurs dans ces réponses courtes. Les classements et catalogues utilisent également une synthèse factuelle spécialisée. La génération libre reste réservée aux ensembles détaillés plus longs, avec le repli factuel existant.
+
+Le libellé dépend du résultat réel. Une question demandant des actions avec leurs utilisateurs est introduite comme une liste d’événements, et une demande portant réellement sur les derniers utilisateurs garde le libellé utilisateur. Le tableau n’affiche aucune colonne technique AUDITAI_*.
+
+### Validation automatique
+
+La suite backend compte désormais 59 tests réussis. Sept tests ont été ajoutés pour vérifier :
+
+- la réparation d’un mauvais plan « utilisateurs ayant le moins d’actions » ;
+- la réparation d’un tri lexical erroné pour les dernières actions ;
+- le calcul du total d’un catalogue avant la limite ;
+- le calcul des ex aequo avant la limite d’un classement ;
+- l’explication « affichés sur total » ;
+- la formulation d’une égalité au minimum ;
+- la conservation exacte de six tuples sans appel de synthèse à Qwen.
+
+La compilation Python, le contrôle TypeScript et le build de production Next.js 16.3.4 ont réussi. Le fichier généré frontend/next-env.d.ts a été restauré afin de ne pas versionner un changement propre au mode de compilation.
+
+### Validation réelle avec le profil light
+
+Les six questions de la section 29 ont été rejouées via l’API authentifiée avec Qwen2.5-Coder-1.5B Q4, Oracle et la limite configurée à 10.
+
+1. La liste des tables ou objets audités exécute un DISTINCT OBJECT_NAME, retourne 10 lignes, expose total_available=15 et truncated=true, puis annonce 10 résultats affichés sur 15.
+2. Les deux utilisateurs ayant le plus d’actions utilisent COUNT, GROUP BY DBUSERNAME et EVENT_COUNT DESC. CYRILLE et SYSTEM sont ex aequo à 359 événements.
+3. Les deux utilisateurs ayant le moins d’actions utilisent le même calcul avec EVENT_COUNT ASC. Le système indique que 11 utilisateurs sont ex aequo au minimum de 357 événements et affiche les deux premiers selon le tri stable.
+4. Les six dernières actions sélectionnent ACTION_NAME, trient EVENT_TIMESTAMP DESC et retournent six lignes.
+5. Les six dernières actions avec leurs utilisateurs sélectionnent DBUSERNAME et ACTION_NAME, trient EVENT_TIMESTAMP DESC et conservent les six couples.
+6. Les six dernières actions avec utilisateur et date sélectionnent DBUSERNAME, ACTION_NAME et EVENT_TIMESTAMP, trient EVENT_TIMESTAMP DESC et restituent les six triplets dans le même ordre.
+
+Après le dernier ajustement de libellé, la sixième question a été rejouée une nouvelle fois : six lignes, colonnes DBUSERNAME, ACTION_NAME et EVENT_TIMESTAMP, introduction « Six événements correspondent à la demande » et six descriptions fidèles. Un échec intermédiaire de ce seul essai provenait d’un redémarrage manuel de l’API sans variables ORACLE_PASSWORD ; il ne venait ni du SQL ni du modèle. L’API a été relancée avec le même environnement que scripts/start-local.ps1 et le test suivant a réussi.
+
+### Performances mesurées et état de reprise
+
+Sur ce PC, Oracle a exécuté les cinq premières requêtes mesurées entre environ 0,02 et 0,24 seconde. L’interprétation par le profil light a pris environ 29 à 100 secondes selon la question. La synthèse déterministe a pris de zéro à trois millisecondes. Le principal coût reste donc Qwen sur CPU. Un seul modèle est actif : le profil light. Oracle, l’API et l’interface restent lancés pour les essais manuels.
+
+Le score officiel de généralisation reste 89,1 % sur le premier passage aveugle v3. Les 59 tests et les six questions corrigées prouvent la non-régression et le fonctionnement de ce lot ; ils ne constituent pas une garantie de 100 % sur toute question future. La prochaine étape scientifique reste une exécution inchangée du corpus v4 sur un matériel permettant de tester le 7B dans des délais acceptables.

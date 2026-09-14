@@ -243,9 +243,10 @@ def build_general_query(plan: Mapping[str, Any], default_limit: int) -> tuple[st
         clauses = list(base_clauses)
         clauses.append(f"{column} IS NOT NULL")
         source_where = " WHERE " + " AND ".join(f"({item})" for item in clauses)
+        distinct_sql = f"SELECT DISTINCT {column} FROM {AUDIT_TABLE}{source_where}"
         sql = (
-            f"SELECT DISTINCT {column} FROM {AUDIT_TABLE}{source_where} "
-            f"ORDER BY {column} ASC FETCH FIRST {limit} ROWS ONLY"
+            f"SELECT {column}, COUNT(*) OVER () AS AUDITAI_TOTAL_AVAILABLE "
+            f"FROM ({distinct_sql}) ORDER BY {column} ASC FETCH FIRST {limit} ROWS ONLY"
         )
         return sql, binds
 
@@ -258,6 +259,25 @@ def build_general_query(plan: Mapping[str, Any], default_limit: int) -> tuple[st
         group = ""
         if dimensions:
             group = " GROUP BY " + ", ".join(COLUMN_SQL[field] for field in dimensions)
+
+        if dimensions and alias == "EVENT_COUNT" and str(plan.get("response_mode") or "") == "ranking":
+            inner_sql = f"SELECT {', '.join(select_items)} FROM {AUDIT_TABLE}{where}{group}"
+            requested_order = plan.get("order_by") or []
+            direction = "DESC"
+            if requested_order and isinstance(requested_order[0], Mapping):
+                candidate = str(requested_order[0].get("direction") or "").upper()
+                if candidate in {"ASC", "DESC"}:
+                    direction = candidate
+            aliases = [COLUMN_ALIAS[field] for field in dimensions]
+            stable_order = ", ".join(f"{item} ASC" for item in aliases)
+            outer_order = f"EVENT_COUNT {direction}" + (f", {stable_order}" if stable_order else "")
+            sql = (
+                f"SELECT {', '.join(aliases)}, EVENT_COUNT, "
+                f"COUNT(*) OVER (PARTITION BY EVENT_COUNT) AS AUDITAI_TIE_COUNT "
+                f"FROM ({inner_sql}) ORDER BY {outer_order} FETCH FIRST {limit} ROWS ONLY"
+            )
+            return sql, binds
+
         order = _order_clause(plan.get("order_by"), dimensions, True)
         if not order and dimensions:
             order = f" ORDER BY {alias} DESC"

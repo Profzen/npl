@@ -58,6 +58,8 @@ export interface QueryResponse {
   synthesis: string
   rows: Record<string, unknown>[]
   row_count: number
+  total_available?: number | null
+  truncated?: boolean
   blocked: boolean
   intent_status?: 'query' | 'clarification' | 'refusal'
   clarification?: string | null
@@ -91,6 +93,8 @@ export interface HistoryEntry {
   synthesis: string
   rows: Record<string, unknown>[]
   row_count: number
+  total_available?: number | null
+  truncated?: boolean
   blocked: boolean
   intent_status?: 'query' | 'clarification' | 'refusal'
   clarification?: string | null

@@ -23,6 +23,80 @@ _SAFE_VALUE = re.compile(r"^[\w $#.\-/:'À-ÿ]{1,160}$", re.UNICODE)
 _ISO_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2}(?::\d{2})?)?$")
 
 
+_NUMBER_WORDS = {
+    "UN": 1, "UNE": 1, "DEUX": 2, "TROIS": 3, "QUATRE": 4, "CINQ": 5,
+    "SIX": 6, "SEPT": 7, "HUIT": 8, "NEUF": 9, "DIX": 10, "ONZE": 11,
+    "DOUZE": 12, "TREIZE": 13, "QUATORZE": 14, "QUINZE": 15, "SEIZE": 16,
+    "DIX SEPT": 17, "DIX HUIT": 18, "DIX NEUF": 19, "VINGT": 20,
+}
+
+
+def _number_requested(text: str) -> int | None:
+    words = "|".join(sorted((re.escape(item) for item in _NUMBER_WORDS), key=len, reverse=True))
+    match = re.search(
+        rf"\b(\d{{1,3}}|{words})\b\s+(?=(?:DERNIER|DERNIERE|RECENT|RECENTE|"
+        rf"UTILISATEUR|USER|COMPTE|PERSONNE|ACTION|OPERATION|EVENEMENT|TABLE|OBJET|POSTE|MACHINE))",
+        text,
+    )
+    if not match:
+        return None
+    raw = re.sub(r"\s+", " ", match.group(1))
+    value = int(raw) if raw.isdigit() else _NUMBER_WORDS.get(raw)
+    return max(1, min(200, value)) if value is not None else None
+
+
+def _mentioned_dimensions(text: str) -> list[str]:
+    patterns = (
+        ("user", r"\b(UTILISATEURS?|USERS?|COMPTES?|PERSONNES?|INDIVIDUS?|AUTEURS?|ACTEURS?)\b"),
+        ("object", r"\b(TABLES?|OBJETS?|RESSOURCES?)\b"),
+        ("host", r"\b(POSTES?|MACHINES?|HOTES?)\b"),
+        ("action", r"\b(ACTIONS?|ACTIVITES?|OPERATIONS?|EVENEMENTS?)\b"),
+        ("timestamp", r"\b(DATES?|HEURES?|QUAND)\b"),
+    )
+    return [field for field, pattern in patterns if re.search(pattern, text)]
+
+
+def _has_specific_action(text: str) -> bool:
+    canonical = any(re.search(rf"\b{re.escape(action)}\b", text) for action in ALLOWED_ACTIONS)
+    semantic = bool(re.search(
+        r"\b(SUPPRIM|EFFAC|AJOUT|INSER|MODIFI|MISE A JOUR|CONSULT|LECTUR|"
+        r"CONNEX|DECONNEX|ATTRIBU|RETIR|DROITS?|PRIVILEG|VID|PURG)\w*\b",
+        text,
+    ))
+    return canonical or semantic
+
+
+def _question_semantics(question: str) -> dict[str, Any]:
+    text = _norm(question)
+    dimensions = _mentioned_dimensions(text)
+    minimum = bool(re.search(
+        r"\b(MOIN|MOINS|MOINDRE|MINIMUM|MINIMAL|PLUS FAIBLE)\b", text
+    ))
+    maximum = bool(re.search(
+        r"\b(PLUS D ACTIONS?|PLUS D ACTIVITES?|PLUS D OPERATIONS?|"
+        r"PLUS ACTIF|PLUS ACTIVE|DAVANTAGE D|MAXIMUM|MAXIMAL|PLUS FREQUENT)\b",
+        text,
+    ))
+    ranking_direction = "asc" if minimum else ("desc" if maximum else None)
+    recency = bool(re.search(
+        r"\b(DERNIERS?|DERNIERES?|RECENTS?|RECENTES?)\b\s+"
+        r"(?:\w+\s+){0,2}(UTILISATEURS?|USERS?|COMPTES?|PERSONNES?|ACTIONS?|"
+        r"ACTIVITES?|OPERATIONS?|EVENEMENTS?|TABLES?|OBJETS?)\b",
+        text,
+    ))
+    singular = bool(re.search(r"\b(LE|LA|L|QUEL|QUELLE)\s+(DERNIER|DERNIERE|PLUS)\b", text))
+    return {
+        "text": text,
+        "dimensions": dimensions,
+        "ranking_direction": ranking_direction,
+        "recency": recency and ranking_direction is None and bool(re.search(
+            r"\b(BASE|ACTION|ACTIVITE|OPERATION|EVENEMENT|AUDIT|JOURNAL)\w*\b", text
+        )),
+        "limit": _number_requested(text) or (1 if singular else None),
+        "specific_action": _has_specific_action(text),
+    }
+
+
 def _text(value: Any) -> str:
     return str(value or "").strip()
 
@@ -188,6 +262,35 @@ def normalize_query_plan(
         calculation = {"operation": "count", "field": "event"}
     if source in {"users", "objects", "actions"} and response_mode == "detail":
         response_mode = "list"
+
+    cues = _question_semantics(question)
+    if status == "query" and cues["ranking_direction"]:
+        ranking_field = next(
+            (field for field in ("user", "object", "host", "action") if field in cues["dimensions"]),
+            group_by[0] if group_by else (dimensions[0] if dimensions else None),
+        )
+        if ranking_field:
+            source = "events"
+            dimensions = [ranking_field]
+            calculation = {"operation": "count", "field": "event"}
+            group_by = [ranking_field]
+            order_by = [{"field": "event_count", "direction": cues["ranking_direction"]}]
+            limit = cues["limit"] or limit
+            response_mode = "ranking"
+            if not cues["specific_action"]:
+                filters = [item for item in filters if item["field"] != "action"]
+    elif status == "query" and cues["recency"]:
+        source = "events"
+        calculation = None
+        group_by = []
+        order_by = [{"field": "timestamp", "direction": "desc"}]
+        limit = cues["limit"] or limit
+        response_mode = "detail"
+        for field in cues["dimensions"]:
+            if field not in dimensions:
+                dimensions.append(field)
+        if not cues["specific_action"]:
+            filters = [item for item in filters if item["field"] != "action"]
 
     comparison_ranges: list[dict[str, Any]] = []
     raw_ranges = payload.get("comparison_ranges")

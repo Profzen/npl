@@ -385,14 +385,27 @@ def _execute_query_pipeline(req: QueryRequest, username: str, request_id: str | 
             current_summary="Preparation de la reponse en langage clair",
         )
 
+    total_available: int | None = None
+    if rows and rows[0].get("AUDITAI_TOTAL_AVAILABLE") is not None:
+        total_available = int(rows[0]["AUDITAI_TOTAL_AVAILABLE"])
+
     t_syn_start = time.perf_counter()
     if intent_status in {"clarification", "refusal"}:
         synthesis = str(clarification or (
             "Precisez l'utilisateur, l'objet, l'action ou la periode a examiner."
         ))
     else:
-        synthesis = build_local_synthesis(req.question, rows, error, intent)
+        synthesis = build_local_synthesis(
+            req.question, rows, error, intent, total_available
+        )
     t_syn_end = time.perf_counter()
+
+    # Les colonnes AUDITAI_* servent a garantir une synthese exacte (total et
+    # ex aequo). Elles ne font pas partie du resultat metier presente.
+    rows = [
+        {key: value for key, value in row.items() if not key.startswith("AUDITAI_")}
+        for row in rows
+    ]
 
     if request_id is not None:
         _update_query_progress(
@@ -419,6 +432,8 @@ def _execute_query_pipeline(req: QueryRequest, username: str, request_id: str | 
         "synthesis": synthesis,
         "rows": rows[:fetch_limit],
         "row_count": len(rows),
+        "total_available": total_available,
+        "truncated": total_available is not None and total_available > len(rows),
         "blocked": blocked,
         "intent_status": intent_status,
         "clarification": clarification,
@@ -449,6 +464,8 @@ def _execute_query_pipeline(req: QueryRequest, username: str, request_id: str | 
         synthesis=synthesis,
         rows=rows[:fetch_limit],
         row_count=len(rows),
+        total_available=total_available,
+        truncated=total_available is not None and total_available > len(rows),
         blocked=blocked,
         intent_status=intent_status,
         clarification=str(clarification) if clarification else None,

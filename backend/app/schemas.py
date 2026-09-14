@@ -13,6 +13,8 @@ class QueryResponse(BaseModel):
     synthesis: str
     rows: list[dict[str, Any]]
     row_count: int
+    total_available: int | None = None
+    truncated: bool = False
     blocked: bool = False
     intent_status: str = "query"
     clarification: str | None = None
