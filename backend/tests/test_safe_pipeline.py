@@ -639,7 +639,7 @@ class GeneralQueryPlanTests(unittest.TestCase):
                 response_mode="ranking",
             ),
         )
-        self.assertIn("le moins actif", answer)
+        self.assertIn("ayant le moins d’événements", answer)
 
     def test_semantic_cues_repair_general_least_user_plan(self) -> None:
         plan = normalize_query_plan(
@@ -741,6 +741,71 @@ class GeneralQueryPlanTests(unittest.TestCase):
             self.assertIn(f"{index}.", answer)
             self.assertIn(row["DBUSERNAME"], answer)
             self.assertIn(row["EVENT_TIMESTAMP"], answer)
+
+    def test_object_failure_ranking_keeps_relative_period_and_excludes_nulls(self) -> None:
+        question = (
+            "Sur quels objets y a-t-il eu le plus d'echecs au cours des "
+            "deux dernieres semaines ? Donne-moi les trois premiers."
+        )
+        plan = normalize_query_plan(
+            question,
+            {
+                "status": "query", "source": "events", "dimensions": ["object"],
+                "calculation": {"operation": "count", "field": "event"},
+                "filters": [{"field": "return_code", "operator": "failure", "value": None}],
+                "time": {"mode": "all"}, "group_by": ["object"],
+                "order_by": [{"field": "event_count", "direction": "desc"}],
+                "limit": 3, "response_mode": "detail",
+            },
+            USERS, OBJECTS,
+        )
+        self.assertEqual(plan["response_mode"], "ranking")
+        self.assertEqual(plan["time"], {"mode": "relative_last", "unit": "week", "value": 2})
+        self.assertEqual(plan["filters"], [
+            {"field": "return_code", "operator": "failure", "value": None}
+        ])
+        query = build_safe_audit_query(plan)
+        self.assertIn("OBJECT_NAME IS NOT NULL", query.sql)
+        self.assertIn("NUMTODSINTERVAL(:time_value, 'DAY')", query.sql)
+        self.assertEqual(query.binds["time_value"], 14)
+
+    def test_clear_delete_ranking_recovers_from_model_clarification(self) -> None:
+        plan = normalize_query_plan(
+            "Sur quels table y a-t-il eu le plus de suppression au cours des deux dernieres semaines ?",
+            {"status": "clarification", "source": "events", "dimensions": []},
+            USERS, OBJECTS,
+        )
+        self.assertEqual(plan["status"], "query")
+        self.assertEqual(plan["group_by"], ["object"])
+        self.assertEqual(plan["calculation"], {"operation": "count", "field": "event"})
+        self.assertEqual(plan["order_by"], [{"field": "event_count", "direction": "desc"}])
+        self.assertEqual(plan["limit"], 1)
+        self.assertEqual(plan["time"], {"mode": "relative_last", "unit": "week", "value": 2})
+        self.assertIn(
+            {"field": "action", "operator": "in", "value": ["DELETE"]},
+            plan["filters"],
+        )
+
+    def test_who_created_most_tables_ranks_users_and_filters_create_table(self) -> None:
+        plan = normalize_query_plan(
+            "qui a creer le plus de table ?",
+            {
+                "status": "query", "source": "events", "dimensions": ["object"],
+                "calculation": {"operation": "count_distinct", "field": "object"},
+                "group_by": ["object"],
+                "order_by": [{"field": "value", "direction": "desc"}],
+                "limit": 1, "response_mode": "ranking",
+            },
+            USERS, OBJECTS,
+        )
+        self.assertEqual(plan["dimensions"], ["user"])
+        self.assertEqual(plan["group_by"], ["user"])
+        self.assertEqual(plan["calculation"], {"operation": "count", "field": "event"})
+        self.assertEqual(plan["order_by"], [{"field": "event_count", "direction": "desc"}])
+        self.assertIn(
+            {"field": "action", "operator": "in", "value": ["CREATE TABLE"]},
+            plan["filters"],
+        )
 
 
 if __name__ == "__main__":

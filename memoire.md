@@ -1355,3 +1355,44 @@ Après le dernier ajustement de libellé, la sixième question a été rejouée 
 Sur ce PC, Oracle a exécuté les cinq premières requêtes mesurées entre environ 0,02 et 0,24 seconde. L’interprétation par le profil light a pris environ 29 à 100 secondes selon la question. La synthèse déterministe a pris de zéro à trois millisecondes. Le principal coût reste donc Qwen sur CPU. Un seul modèle est actif : le profil light. Oracle, l’API et l’interface restent lancés pour les essais manuels.
 
 Le score officiel de généralisation reste 89,1 % sur le premier passage aveugle v3. Les 59 tests et les six questions corrigées prouvent la non-régression et le fonctionnement de ce lot ; ils ne constituent pas une garantie de 100 % sur toute question future. La prochaine étape scientifique reste une exécution inchangée du corpus v4 sur un matériel permettant de tester le 7B dans des délais acceptables.
+
+## 31. Généralisation après trois nouvelles questions libres — 14 septembre 2026
+
+### Questions et diagnostic initial
+
+Trois formulations écrites librement depuis l’interface ont été auditées.
+
+1. « Sur quels objets y a-t-il eu le plus d’échecs au cours des deux dernières semaines ? Donne-moi les trois premiers. » Le premier SQL comptait correctement les échecs par objet et limitait à trois, mais omettait la période. Il conservait aussi les événements dont OBJECT_NAME est nul ; la première ligne apparaissait donc sous la forme « - (67) ».
+2. « Sur quels table y a-t-il eu le plus de suppression au cours des deux dernières semaines ? » Le modèle léger a demandé une reformulation alors que la dimension, l’action, la période et le classement étaient suffisamment explicites.
+3. « qui a creer le plus de table ? » Le premier plan classait les objets et comptait chaque objet distinct. Il répondait donc « FACTURES » alors que le pronom « qui » demandait un acteur. Le filtre CREATE TABLE manquait également.
+
+Ces résultats montrent que la première généralisation des classements restait incomplète : elle supposait encore que Qwen fournirait toujours la période et l’action, et ne distinguait pas une quantité temporelle d’une limite de résultats dans toutes les constructions.
+
+### Corrections générales
+
+Le validateur dispose maintenant d’un ancrage sémantique supplémentaire, appliqué après Qwen :
+
+- « qui » désigne la dimension utilisateur lorsqu’une action est attribuée à un acteur ;
+- les actions explicites sont extraites avec le même vocabulaire général que la politique historique : DELETE, CREATE TABLE et les autres actions autorisées sont replacées dans le plan sous forme de filtres liés ;
+- les notions d’échec ou de réussite corrigent le filtre de code retour ;
+- les périodes relatives N minutes, heures, jours, semaines, mois ou années sont extraites de la question si Qwen les omet ;
+- « plus d’échecs », « plus de suppressions », « plus de créations » et les formulations de même structure activent un classement compté ;
+- un plan de clarification peut devenir une requête seulement lorsque la question contient à la fois un classement clair et une dimension reconnue ; un refus de sécurité n’est jamais transformé ;
+- les quantités temporelles et les quantités de résultats sont séparées. Dans « deux dernières semaines, trois premiers », deux définit la période et trois définit la limite ;
+- les dimensions groupées nulles sont exclues avant le classement, ce qui supprime la ligne artificielle « - ».
+
+Le détecteur d’actions est partagé entre la politique historique et le plan composable afin d’éviter deux vocabulaires divergents. Ces traitements portent sur des catégories grammaticales et les opérateurs du plan ; aucune des trois phrases complètes n’est inscrite dans le code d’exécution.
+
+### Validation
+
+La suite backend compte maintenant 62 tests réussis. Trois tests nouveaux reproduisent les plans imparfaits observés et exigent :
+
+- période relative de deux semaines, filtre d’échec, trois résultats et exclusion des objets nuls ;
+- transformation d’une clarification injustifiée en classement des objets filtré par DELETE ;
+- classement des utilisateurs filtré par CREATE TABLE pour une question introduite par « qui ».
+
+Le premier test réel des trois questions, avant la dernière correction grammaticale, a confirmé que les deuxième et troisième SQL étaient devenus corrects. La deuxième requête filtrait DELETE, limitait la période à 14 jours, groupait par OBJECT_NAME et retournait un objet. La troisième filtrait CREATE TABLE, groupait par DBUSERNAME et retournait un utilisateur. Leurs formulations ont ensuite été améliorées pour produire « L’objet » et « L’utilisateur » au lieu de « Le objet » et « Le utilisateur ».
+
+La première question a été rejouée après prise en charge de la variante normalisée « PLUS D ECHECS ». Le SQL final utilise un filtre d’échec, NUMTODSINTERVAL avec la valeur liée 14, OBJECT_NAME IS NOT NULL, GROUP BY OBJECT_NAME, EVENT_COUNT DESC et FETCH FIRST 3 ROWS ONLY. Le résultat réel est SALARIES avec 4 événements, puis FOURNISSEURS et HR avec 3 événements chacun. La synthèse respecte cet ordre et aucune ligne « - » n’apparaît.
+
+Le profil actif reste Qwen2.5-Coder-1.5B Q4. Oracle, llama-server, l’API et l’interface restent actifs après cette validation. Le score de généralisation officiel demeure 89,1 % sur le corpus aveugle v3 ; ces 62 tests et essais ciblés mesurent la correction et la non-régression, pas une précision universelle.

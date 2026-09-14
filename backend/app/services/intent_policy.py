@@ -25,7 +25,7 @@ def _catalog_matches(question_norm: str, values: Iterable[str]) -> list[str]:
     return sorted(set(matches), key=lambda item: (-len(item), item))
 
 
-def _detect_actions(text: str) -> list[str]:
+def detect_actions(text: str) -> list[str]:
     actions: list[str] = []
 
     def add(action: str) -> None:
@@ -319,7 +319,7 @@ def normalize_intent(
     ]
     action_evidence_is_grounded = bool(grounded_evidence)
 
-    explicit_actions = _detect_actions(text)
+    explicit_actions = detect_actions(text)
     model_actions = list(dict.fromkeys(
         str(value).strip().upper()
         for value in (raw_intent.get("actions") or [])

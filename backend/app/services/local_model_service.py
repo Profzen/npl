@@ -250,9 +250,16 @@ def _ranking_synthesis(
         if label_key == "ACTION_NAME":
             frequency = "la moins fréquente" if ascending else "la plus fréquente"
             return f"L’action {frequency} est {names[0]}, avec {counts[0]} événement(s)."
+        subject = {
+            "DBUSERNAME": "L’utilisateur",
+            "OBJECT_NAME": "L’objet",
+            "USERHOST": "Le poste",
+            "EVENT_DAY": "Le jour",
+        }.get(label_key, f"Le {singular_label}")
+        direction_text = "le moins" if ascending else "le plus"
         return (
-            f"Le {singular_label} {'le moins actif' if ascending else 'le plus actif'} "
-            f"est {names[0]}, avec {counts[0]} événement(s)."
+            f"{subject} ayant {direction_text} d’événements est {names[0]}, "
+            f"avec {counts[0]} événement(s)."
         )
     if same_count and tie_count > len(normalized):
         return (

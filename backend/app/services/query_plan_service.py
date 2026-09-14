@@ -4,6 +4,7 @@ import re
 import unicodedata
 from typing import Any, Iterable, Mapping
 
+from app.services.intent_policy import detect_actions
 from app.services.safe_sql_builder import ALLOWED_ACTIONS
 
 
@@ -32,22 +33,33 @@ _NUMBER_WORDS = {
 
 
 def _number_requested(text: str) -> int | None:
-    words = "|".join(sorted((re.escape(item) for item in _NUMBER_WORDS), key=len, reverse=True))
-    match = re.search(
-        rf"\b(\d{{1,3}}|{words})\b\s+(?=(?:DERNIER|DERNIERE|RECENT|RECENTE|"
-        rf"UTILISATEUR|USER|COMPTE|PERSONNE|ACTION|OPERATION|EVENEMENT|TABLE|OBJET|POSTE|MACHINE))",
-        text,
+    words = "|".join(
+        sorted((re.escape(item) for item in _NUMBER_WORDS), key=len, reverse=True)
     )
-    if not match:
-        return None
-    raw = re.sub(r"\s+", " ", match.group(1))
-    value = int(raw) if raw.isdigit() else _NUMBER_WORDS.get(raw)
-    return max(1, min(200, value)) if value is not None else None
+    pattern = re.compile(
+        rf"\b(\d{{1,3}}|{words})\b\s+"
+        rf"(?=(?:DERNIER|DERNIERE|RECENT|RECENTE|PREMIER|PREMIERE|"
+        rf"UTILISATEUR|USER|COMPTE|PERSONNE|ACTION|OPERATION|EVENEMENT|"
+        rf"TABLE|OBJET|POSTE|MACHINE))"
+    )
+    for match in pattern.finditer(text):
+        suffix = text[match.end():]
+        if re.match(
+            r"\s*(?:DERNIERS?|DERNIERES?)?\s*"
+            r"(?:MINUTES?|HEURES?|JOURS?|SEMAINES?|MOIS|ANS?|ANNEES?)\b",
+            suffix,
+        ):
+            continue
+        raw = re.sub(r"\s+", " ", match.group(1))
+        value = int(raw) if raw.isdigit() else _NUMBER_WORDS.get(raw)
+        if value is not None:
+            return max(1, min(200, value))
+    return None
 
 
 def _mentioned_dimensions(text: str) -> list[str]:
     patterns = (
-        ("user", r"\b(UTILISATEURS?|USERS?|COMPTES?|PERSONNES?|INDIVIDUS?|AUTEURS?|ACTEURS?)\b"),
+        ("user", r"\b(QUI|UTILISATEURS?|USERS?|COMPTES?|PERSONNES?|INDIVIDUS?|AUTEURS?|ACTEURS?)\b"),
         ("object", r"\b(TABLES?|OBJETS?|RESSOURCES?)\b"),
         ("host", r"\b(POSTES?|MACHINES?|HOTES?)\b"),
         ("action", r"\b(ACTIONS?|ACTIVITES?|OPERATIONS?|EVENEMENTS?)\b"),
@@ -74,7 +86,9 @@ def _question_semantics(question: str) -> dict[str, Any]:
     ))
     maximum = bool(re.search(
         r"\b(PLUS D ACTIONS?|PLUS D ACTIVITES?|PLUS D OPERATIONS?|"
-        r"PLUS ACTIF|PLUS ACTIVE|DAVANTAGE D|MAXIMUM|MAXIMAL|PLUS FREQUENT)\b",
+        r"PLUS ACTIF|PLUS ACTIVE|DAVANTAGE D|MAXIMUM|MAXIMAL|PLUS FREQUENT|"
+        r"PLUS D(?:E)? (?:ACTIONS?|ACTIVITES?|OPERATIONS?|EVENEMENTS?|ECHECS?|ERREURS?|"
+        r"SUPPRESSIONS?|CREATIONS?|TABLES?|OBJETS?))\b",
         text,
     ))
     ranking_direction = "asc" if minimum else ("desc" if maximum else None)
@@ -84,7 +98,16 @@ def _question_semantics(question: str) -> dict[str, Any]:
         r"ACTIVITES?|OPERATIONS?|EVENEMENTS?|TABLES?|OBJETS?)\b",
         text,
     ))
-    singular = bool(re.search(r"\b(LE|LA|L|QUEL|QUELLE)\s+(DERNIER|DERNIERE|PLUS)\b", text))
+    singular = bool(
+        re.search(r"\b(LE|LA|L|QUEL|QUELLE)\s+(DERNIER|DERNIERE|PLUS)\b", text)
+        or (ranking_direction and re.search(r"\bLE PLUS D(?:E)?\b", text))
+    )
+    explicit_actions = detect_actions(text)
+    outcome = (
+        "failure" if re.search(r"\b(ECHECS?|ECHOUES?|ERREURS?|REFUSEES?|REJETEES?)\b", text)
+        else "success" if re.search(r"\b(REUSSIS?|REUSSITES?|SUCCES)\b", text)
+        else None
+    )
     return {
         "text": text,
         "dimensions": dimensions,
@@ -93,7 +116,10 @@ def _question_semantics(question: str) -> dict[str, Any]:
             r"\b(BASE|ACTION|ACTIVITE|OPERATION|EVENEMENT|AUDIT|JOURNAL)\w*\b", text
         )),
         "limit": _number_requested(text) or (1 if singular else None),
-        "specific_action": _has_specific_action(text),
+        "specific_action": bool(explicit_actions) or _has_specific_action(text),
+        "explicit_actions": explicit_actions,
+        "outcome": outcome,
+        "time": _time_requested(text),
     }
 
 
@@ -127,6 +153,43 @@ def _safe_list(raw: Any, allowed: set[str]) -> list[str]:
         if value in allowed and value not in result:
             result.append(value)
     return result
+
+
+def _time_requested(text: str) -> dict[str, Any] | None:
+    units = {
+        "MINUTE": "minute", "MINUTES": "minute",
+        "HEURE": "hour", "HEURES": "hour",
+        "JOUR": "day", "JOURS": "day",
+        "SEMAINE": "week", "SEMAINES": "week",
+        "MOIS": "month",
+        "AN": "year", "ANS": "year", "ANNEE": "year", "ANNEES": "year",
+    }
+    number_words = "|".join(
+        sorted((re.escape(item) for item in _NUMBER_WORDS), key=len, reverse=True)
+    )
+    match = re.search(
+        rf"\b(\d{{1,4}}|{number_words})\s+"
+        rf"(?:DERNIERS?|DERNIERES?)?\s*"
+        rf"(MINUTES?|HEURES?|JOURS?|SEMAINES?|MOIS|ANS?|ANNEES?)\b",
+        text,
+    )
+    if match:
+        raw_value = re.sub(r"\s+", " ", match.group(1))
+        value = int(raw_value) if raw_value.isdigit() else _NUMBER_WORDS.get(raw_value)
+        unit = units.get(match.group(2))
+        if value and unit:
+            return {"mode": "relative_last", "unit": unit, "value": value}
+    if re.search(r"\bAUJOURD HUI\b", text):
+        return {"mode": "today"}
+    if re.search(r"\bHIER\b", text):
+        return {"mode": "yesterday"}
+    if re.search(r"\b(?:CE|CETTE)\s+(JOUR|SEMAINE|MOIS|ANNEE)\b", text):
+        raw_unit = re.search(r"\b(JOUR|SEMAINE|MOIS|ANNEE)\b", text)
+        return {"mode": "current", "unit": units[raw_unit.group(1)]}
+    if re.search(r"\b(?:DERNIER|DERNIERE)\s+(JOUR|SEMAINE|MOIS|ANNEE)\b", text):
+        raw_unit = re.search(r"\b(JOUR|SEMAINE|MOIS|ANNEE)\b", text)
+        return {"mode": "previous", "unit": units[raw_unit.group(1)]}
+    return None
 
 
 def _normalise_time(raw: Any) -> dict[str, Any]:
@@ -264,11 +327,14 @@ def normalize_query_plan(
         response_mode = "list"
 
     cues = _question_semantics(question)
+    ranking_field = next(
+        (field for field in ("user", "object", "host", "action") if field in cues["dimensions"]),
+        group_by[0] if group_by else (dimensions[0] if dimensions else None),
+    )
+    if status == "clarification" and cues["ranking_direction"] and ranking_field:
+        status = "query"
+        clarification = None
     if status == "query" and cues["ranking_direction"]:
-        ranking_field = next(
-            (field for field in ("user", "object", "host", "action") if field in cues["dimensions"]),
-            group_by[0] if group_by else (dimensions[0] if dimensions else None),
-        )
         if ranking_field:
             source = "events"
             dimensions = [ranking_field]
@@ -291,6 +357,17 @@ def normalize_query_plan(
                 dimensions.append(field)
         if not cues["specific_action"]:
             filters = [item for item in filters if item["field"] != "action"]
+
+    if status == "query" and cues["explicit_actions"]:
+        filters = [item for item in filters if item["field"] != "action"]
+        filters.append({
+            "field": "action", "operator": "in", "value": cues["explicit_actions"]
+        })
+    if status == "query" and cues["outcome"]:
+        filters = [item for item in filters if item["field"] != "return_code"]
+        filters.append({
+            "field": "return_code", "operator": cues["outcome"], "value": None
+        })
 
     comparison_ranges: list[dict[str, Any]] = []
     raw_ranges = payload.get("comparison_ranges")
@@ -339,7 +416,7 @@ def normalize_query_plan(
         "dimensions": dimensions,
         "calculation": calculation,
         "filters": filters,
-        "time": _normalise_time(payload.get("time")),
+        "time": cues["time"] or _normalise_time(payload.get("time")),
         "comparison_ranges": comparison_ranges,
         "group_by": group_by,
         "order_by": order_by,

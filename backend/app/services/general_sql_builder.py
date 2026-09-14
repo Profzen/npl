@@ -261,7 +261,18 @@ def build_general_query(plan: Mapping[str, Any], default_limit: int) -> tuple[st
             group = " GROUP BY " + ", ".join(COLUMN_SQL[field] for field in dimensions)
 
         if dimensions and alias == "EVENT_COUNT" and str(plan.get("response_mode") or "") == "ranking":
-            inner_sql = f"SELECT {', '.join(select_items)} FROM {AUDIT_TABLE}{where}{group}"
+            ranking_clauses = list(base_clauses)
+            ranking_clauses.extend(
+                f"{COLUMN_SQL[field]} IS NOT NULL" for field in dimensions
+            )
+            ranking_where = (
+                " WHERE " + " AND ".join(f"({item})" for item in ranking_clauses)
+                if ranking_clauses else ""
+            )
+            inner_sql = (
+                f"SELECT {', '.join(select_items)} FROM {AUDIT_TABLE}"
+                f"{ranking_where}{group}"
+            )
             requested_order = plan.get("order_by") or []
             direction = "DESC"
             if requested_order and isinstance(requested_order[0], Mapping):
