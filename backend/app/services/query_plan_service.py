@@ -81,6 +81,7 @@ def _has_specific_action(text: str) -> bool:
 def _question_semantics(question: str) -> dict[str, Any]:
     text = _norm(question)
     dimensions = _mentioned_dimensions(text)
+    explicit_actions = detect_actions(text)
     minimum = bool(re.search(
         r"\b(MOIN|MOINS|MOINDRE|MINIMUM|MINIMAL|PLUS FAIBLE)\b", text
     ))
@@ -91,6 +92,9 @@ def _question_semantics(question: str) -> dict[str, Any]:
         r"SUPPRESSIONS?|CREATIONS?|TABLES?|OBJETS?))\b",
         text,
     ))
+    maximum = maximum or bool(
+        explicit_actions and re.search(r"\bPLUS D(?:E)?\b", text)
+    )
     ranking_direction = "asc" if minimum else ("desc" if maximum else None)
     recency = bool(re.search(
         r"\b(DERNIERS?|DERNIERES?|RECENTS?|RECENTES?)\b\s+"
@@ -102,7 +106,6 @@ def _question_semantics(question: str) -> dict[str, Any]:
         re.search(r"\b(LE|LA|L|QUEL|QUELLE)\s+(DERNIER|DERNIERE|PLUS)\b", text)
         or (ranking_direction and re.search(r"\bLE PLUS D(?:E)?\b", text))
     )
-    explicit_actions = detect_actions(text)
     outcome = (
         "failure" if re.search(r"\b(ECHECS?|ECHOUES?|ERREURS?|REFUSEES?|REJETEES?)\b", text)
         else "success" if re.search(r"\b(REUSSIS?|REUSSITES?|SUCCES)\b", text)

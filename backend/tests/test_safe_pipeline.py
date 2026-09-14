@@ -807,6 +807,30 @@ class GeneralQueryPlanTests(unittest.TestCase):
             plan["filters"],
         )
 
+    def test_canonical_action_keyword_can_drive_a_ranking(self) -> None:
+        plan = normalize_query_plan(
+            "Sur quels table y a-t-il eu le plus de delete au cours des 5 dernieres semaines ?",
+            {
+                "status": "query", "source": "events", "dimensions": ["object"],
+                "calculation": None,
+                "filters": [{"field": "action", "operator": "in", "value": ["DELETE"]}],
+                "time": {"mode": "relative_last", "unit": "week", "value": 5},
+                "group_by": [],
+                "order_by": [{"field": "timestamp", "direction": "desc"}],
+                "limit": 1, "response_mode": "detail",
+            },
+            USERS, OBJECTS,
+        )
+        self.assertEqual(plan["group_by"], ["object"])
+        self.assertEqual(plan["calculation"], {"operation": "count", "field": "event"})
+        self.assertEqual(plan["order_by"], [{"field": "event_count", "direction": "desc"}])
+        self.assertEqual(plan["time"], {"mode": "relative_last", "unit": "week", "value": 5})
+        self.assertEqual(plan["limit"], 1)
+        self.assertIn(
+            {"field": "action", "operator": "in", "value": ["DELETE"]},
+            plan["filters"],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1396,3 +1396,13 @@ Le premier test réel des trois questions, avant la dernière correction grammat
 La première question a été rejouée après prise en charge de la variante normalisée « PLUS D ECHECS ». Le SQL final utilise un filtre d’échec, NUMTODSINTERVAL avec la valeur liée 14, OBJECT_NAME IS NOT NULL, GROUP BY OBJECT_NAME, EVENT_COUNT DESC et FETCH FIRST 3 ROWS ONLY. Le résultat réel est SALARIES avec 4 événements, puis FOURNISSEURS et HR avec 3 événements chacun. La synthèse respecte cet ordre et aucune ligne « - » n’apparaît.
 
 Le profil actif reste Qwen2.5-Coder-1.5B Q4. Oracle, llama-server, l’API et l’interface restent actifs après cette validation. Le score de généralisation officiel demeure 89,1 % sur le corpus aveugle v3 ; ces 62 tests et essais ciblés mesurent la correction et la non-régression, pas une précision universelle.
+
+## 32. Classement utilisant directement un mot-clé d’action — 14 septembre 2026
+
+La question libre « Sur quels table y a-t-il eu le plus de delete au cours des 5 dernières semaines ? » reconnaissait déjà DELETE et la période, comme le prouvaient les filtres ACTION_NAME et EVENT_TIMESTAMP du premier SQL. Le défaut venait de la relation entre ces éléments : « le plus de DELETE » n’activait pas le calcul groupé, car le classement général couvrait les noms courants comme « suppressions » mais pas encore toute action canonique reconnue.
+
+Le validateur relie désormais la construction « le plus de » à toute action autorisée détectée dans la question. La règle s’applique donc de la même manière à SELECT, INSERT, UPDATE, DELETE, GRANT, REVOKE, TRUNCATE, LOGON, LOGOFF et aux actions composées sur les utilisateurs ou les tables. Elle impose un comptage, le groupement par la dimension interrogée et un tri décroissant. La variante « moins » utilise le même mécanisme avec un tri croissant. Le nombre appartenant à une durée reste séparé de la limite de résultats.
+
+Un test de non-régression reproduit le plan imparfait observé et exige un groupement par objet, COUNT des événements, EVENT_COUNT DESC, filtre DELETE, période relative de cinq semaines et limite un. La suite backend compte maintenant 63 tests réussis.
+
+Après rechargement de l’API, la question exacte a été rejouée avec Qwen léger et Oracle. Le SQL final filtre DELETE, applique cinq semaines sous forme de 35 jours liés, exclut OBJECT_NAME nul, groupe par OBJECT_NAME, trie EVENT_COUNT DESC et limite à une ligne. Le résultat réel est AUDIT_LOG avec 11 événements. La synthèse répond : « L’objet ayant le plus d’événements est AUDIT_LOG, avec 11 événement(s). »
